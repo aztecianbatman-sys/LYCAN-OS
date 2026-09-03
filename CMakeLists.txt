@@ -26,7 +26,9 @@ target_include_directories(lycan_core PUBLIC src)
 target_compile_definitions(lycan_core PUBLIC LYCAN_VERSION="1.0.0")
 if(WIN32)
  target_link_libraries(lycan_core PUBLIC winhttp)
- add_executable(lycan-vm WIN32 src/main.cpp src/platform/win32_desktop.cpp)
+ # Keep the normal C++ main() entry point. The desktop UI is still native Win32;
+ # using the console subsystem avoids requiring a separate WinMain wrapper.
+ add_executable(lycan-vm src/main.cpp src/platform/win32_desktop.cpp)
  target_link_libraries(lycan-vm PRIVATE lycan_core user32 gdi32 shell32 advapi32)
  target_compile_definitions(lycan-vm PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
  set_target_properties(lycan-vm PROPERTIES OUTPUT_NAME "lycan-vm")
