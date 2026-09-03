@@ -42,7 +42,8 @@ int main(){
     std::filesystem::create_directories(root,ec);
     const auto package=root/"test.lypkg";
     lycan::PackageManifest manifest{"sha-test","SHA Test","1.0.0","LYCAN","/apps/sha-test/app.bin",{}};
-    assert(lycan::PackageArchive::create(package,manifest,{{"app.bin",{'O','K'}}},*new std::string));
+    std::string createError;
+    assert(lycan::PackageArchive::create(package,manifest,{{"app.bin",{'O','K'}}},createError));
     const auto expected=lycan::PackageManager::packageSha256(package);
 
     std::fstream tamper(package,std::ios::in|std::ios::out|std::ios::binary);
