@@ -1,0 +1,52 @@
+name: Windows release
+on:
+  workflow_dispatch:
+  push:
+    branches: [ 'main' ]
+    tags: [ 'v*' ]
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure native LYCAN
+        run: cmake -S . -B build-windows -DLYCAN_HEADLESS=OFF -DLYCAN_BUILD_TESTS=ON
+
+      - name: Build native LYCAN
+        run: cmake --build build-windows --config Release --parallel
+
+      - name: Test LYCAN
+        run: ctest --test-dir build-windows -C Release --output-on-failure
+
+      - name: Build Crawford companion
+        shell: cmd
+        run: |
+          cd third_party\crawford-v0.0.24
+          call npm install --no-audit --no-fund
+          call npx electron-builder --win nsis --publish never
+
+      - name: Assemble installer payload
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path installer\payload | Out-Null
+          Copy-Item (Get-ChildItem build-windows -Filter lycan-vm.exe -Recurse | Select-Object -First 1).FullName installer\payload\lycan-vm.exe -Force
+          $cli = Get-ChildItem build-windows -Filter lycan-cli.exe -Recurse | Select-Object -First 1
+          if ($cli) { Copy-Item $cli.FullName installer\payload\lycan-cli.exe -Force }
+          $craw = Get-ChildItem third_party\crawford-v0.0.24 -Filter 'Crawford*.exe' -Recurse | Where-Object { $_.FullName -notmatch '\\node_modules\\' } | Select-Object -First 1
+          if ($craw) { Copy-Item $craw.FullName installer\payload\Crawford.exe -Force }
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile installer
+        shell: cmd
+        run: |
+          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" installer\LycanOS.iss
+
+      - name: Upload release installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: LycanOS-Windows
+          path: Output\LycanOS-Setup-*.exe
