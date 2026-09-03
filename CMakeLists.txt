@@ -14,7 +14,7 @@ add_library(lycan_core
  src/core/snapshot.cpp
  src/core/settings.cpp
  src/package/package_archive.cpp
- src/package/package_manager.cpp
+ src/package/package_manager_fixed.cpp
  src/runtime/app_manager.cpp
  src/runtime/app_host.cpp
  src/runtime/app_runtime.cpp
