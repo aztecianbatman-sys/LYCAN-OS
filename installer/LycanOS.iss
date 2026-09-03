@@ -1,5 +1,5 @@
 #define AppName "LYCAN OS"
-#define AppVersion "0.4.2"
+#define AppVersion "0.6.0"
 #define AppPublisher "LYCAN"
 #define AppExeName "lycan-vm.exe"
 
@@ -18,11 +18,19 @@ ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#AppExeName}
+DisableProgramGroupPage=yes
 
 [Files]
 Source: "payload\lycan-vm.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "payload\lycan-cli.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "payload\Crawford.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "payload\store\*"; DestDir: "{app}\store"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "payload\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+
+[Dirs]
+Name: "{app}\data"
+Name: "{app}\data\packages"
+Name: "{app}\logs"
+Name: "{localappdata}\LYCAN OS"
 
 [Icons]
 Name: "{autoprograms}\LYCAN OS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
