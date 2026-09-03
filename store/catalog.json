@@ -1,9 +1,12 @@
 {
-  "name": "LYCAN OS",
+  "name": "LYCAN OS Store",
   "version": "1.0.0",
   "apps": [
-    {"id":"lycan-terminal","name":"Terminal","version":"1.0.0","publisher":"LYCAN","description":"Guest command console","url":"","sha256":""},
-    {"id":"lycan-files","name":"Files","version":"1.0.0","publisher":"LYCAN","description":"LYFS file manager","url":"","sha256":""},
-    {"id":"lycan-web","name":"Web","version":"1.0.0","publisher":"LYCAN","description":"Mozilla Gecko web surface","url":"","sha256":""}
+    {"id":"lycan-terminal","name":"Terminal","version":"1.0.0","publisher":"LYCAN","description":"Native ARES guest command workspace","url":"","sha256":"","category":"Utility"},
+    {"id":"lycan-files","name":"Files","version":"1.0.0","publisher":"LYCAN","description":"LYFS guest file manager","url":"","sha256":"","category":"System"},
+    {"id":"lycan-web","name":"Web","version":"1.0.0","publisher":"LYCAN","description":"Mozilla Gecko web surface","url":"","sha256":"","category":"Browser"},
+    {"id":"lycan-snapshots","name":"Snapshots","version":"1.0.0","publisher":"LYCAN","description":"Save and restore guest state","url":"","sha256":"","category":"System"},
+    {"id":"lycan-diagnostics","name":"Diagnostics","version":"1.0.0","publisher":"LYCAN","description":"VM health and security inspection","url":"","sha256":"","category":"Tools"},
+    {"id":"crawford","name":"Crawford","version":"1.0.0","publisher":"LYCAN","description":"AI integration boundary for LYCAN apps","url":"","sha256":"","category":"AI"}
   ]
 }
