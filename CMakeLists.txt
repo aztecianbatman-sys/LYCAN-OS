@@ -13,6 +13,7 @@ add_library(lycan_core
     src/core/snapshot.cpp
     src/package/package_archive.cpp
     src/package/package_manager.cpp
+    src/runtime/app_manager.cpp
     src/runtime/app_host.cpp
 )
 target_include_directories(lycan_core PUBLIC src)
