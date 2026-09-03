@@ -11,6 +11,8 @@ uint32_t ApplicationManager::open(const std::string&id){if(id.empty())return 0;i
 bool ApplicationManager::close(const std::string&id){auto*s=const_cast<AppSession*>(find(id));if(!s)return false;if(!processes_.closeApp(id))return false;sessions_.erase(std::remove_if(sessions_.begin(),sessions_.end(),[&](const auto&x){return x.appId==id;}),sessions_.end());return true;}
 bool ApplicationManager::suspend(const std::string&id){auto*s=const_cast<AppSession*>(find(id));return s&&processes_.suspend(s->pid);}
 bool ApplicationManager::resume(const std::string&id){auto*s=const_cast<AppSession*>(find(id));return s&&processes_.resume(s->pid);}
+bool ApplicationManager::suspend(uint32_t pid){return processes_.suspend(pid);}
+bool ApplicationManager::resume(uint32_t pid){return processes_.resume(pid);}
 bool ApplicationManager::isOpen(const std::string&id)const{return find(id)!=nullptr;}
 const AppSession*ApplicationManager::find(const std::string&id)const noexcept{for(const auto&s:sessions_)if(s.appId==id)return&s;return nullptr;}
 const AppSession*ApplicationManager::find(uint32_t pid)const noexcept{for(const auto&s:sessions_)if(s.pid==pid)return&s;return nullptr;}
