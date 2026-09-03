@@ -5,6 +5,7 @@
 #include "core/security.h"
 #include "package/package_manager.h"
 #include "core/snapshot.h"
+#include "runtime/app_manager.h"
 #include <filesystem>
 #include <string>
 namespace lycan {
@@ -13,9 +14,9 @@ public:
     AppHost(std::filesystem::path dataRoot);
     void boot();
     std::string execute(const std::string& command);
-    AresVm& vm(); Lyfs& fs(); ProcessManager& processes(); SecurityPolicy& security(); PackageManager& packages(); SnapshotManager& snapshots();
+    AresVm& vm(); Lyfs& fs(); ProcessManager& processes(); SecurityPolicy& security(); PackageManager& packages(); SnapshotManager& snapshots(); ApplicationManager& apps();
 private:
     std::filesystem::path root_;
-    AresVm vm_; Lyfs fs_; ProcessManager processes_; SecurityPolicy security_; PackageManager packages_; SnapshotManager snapshots_;
+    AresVm vm_; Lyfs fs_; ProcessManager processes_; SecurityPolicy security_; PackageManager packages_; SnapshotManager snapshots_; ApplicationManager applications_;
 };
 }
