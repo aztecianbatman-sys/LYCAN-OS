@@ -1,3 +1,9 @@
-#include "lycan_platform.h"
+#include "runtime/app_host.h"
 #include <iostream>
-int main(){lycan::Platform p;p.boot();std::cout<<p.status()<<"\n";std::cout<<"Commands: status, ps, fs, spawn <name>, kill <pid>, exit\n";return 0;}
+#include <string>
+int main(){
+ const char* cmds[]={"help","ls","cat /home/Welcome.txt","ps","vm"};
+ lycan::AppHost h("./lycan-data");h.boot();
+ for(auto c:cmds)std::cout<<"lycan$ "<<c<<"\n"<<h.execute(c)<<"\n";
+ return 0;
+}

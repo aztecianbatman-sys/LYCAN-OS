@@ -1,29 +1,9 @@
-[
-  {
-    "id": "lycan-terminal",
-    "name": "Lycan Terminal",
-    "version": "0.5.0",
-    "description": "Native command terminal for the Lycan environment.",
-    "author": "LYCAN Project",
-    "downloadUrl": "",
-    "sha256": ""
-  },
-  {
-    "id": "lycan-files",
-    "name": "Lycan Files",
-    "version": "0.5.0",
-    "description": "File manager for LYFS virtual storage.",
-    "author": "LYCAN Project",
-    "downloadUrl": "",
-    "sha256": ""
-  },
-  {
-    "id": "lycan-web",
-    "name": "Lycan Web",
-    "version": "0.5.0",
-    "description": "Gecko-based web runtime integration boundary.",
-    "author": "LYCAN Project",
-    "downloadUrl": "",
-    "sha256": ""
-  }
-]
+{
+  "name": "LYCAN OS",
+  "version": "1.0.0",
+  "apps": [
+    {"id":"lycan-terminal","name":"Terminal","version":"1.0.0","publisher":"LYCAN","description":"Guest command console","url":"","sha256":""},
+    {"id":"lycan-files","name":"Files","version":"1.0.0","publisher":"LYCAN","description":"LYFS file manager","url":"","sha256":""},
+    {"id":"lycan-web","name":"Web","version":"1.0.0","publisher":"LYCAN","description":"Mozilla Gecko web surface","url":"","sha256":""}
+  ]
+}

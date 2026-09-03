@@ -1,70 +1,27 @@
-name: Windows release
+name: Windows build
 on:
-  workflow_dispatch:
   push:
-    branches: [ 'main' ]
-    tags: [ 'v*' ]
-
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
 jobs:
-  build-windows:
-    runs-on: windows-2022
+  build:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure native LYCAN
-        run: cmake -S . -B build-windows -DLYCAN_HEADLESS=OFF -DLYCAN_BUILD_TESTS=ON
-
-      - name: Build native LYCAN
-        run: cmake --build build-windows --config Release --parallel
-
-      - name: Test LYCAN
-        run: ctest --test-dir build-windows -C Release --output-on-failure
-
-      - name: Assemble installer payload
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path installer\payload\store | Out-Null
-          New-Item -ItemType Directory -Force -Path installer\payload\docs | Out-Null
-          $vm = Get-ChildItem build-windows -Filter lycan-vm.exe -Recurse | Select-Object -First 1
-          if (-not $vm) { throw 'lycan-vm.exe was not produced' }
-          Copy-Item $vm.FullName installer\payload\lycan-vm.exe -Force
-          $cli = Get-ChildItem build-windows -Filter lycan-cli.exe -Recurse | Select-Object -First 1
-          if ($cli) { Copy-Item $cli.FullName installer\payload\lycan-cli.exe -Force }
-          Copy-Item store\catalog.json installer\payload\store\catalog.json -Force
-          if (Test-Path docs) { Copy-Item docs\* installer\payload\docs -Recurse -Force }
-
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
       - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
-
-      - name: Compile LYCAN installer
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+      - name: Package installer
         shell: cmd
-        run: |
-          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" installer\LycanOS.iss
-
-      - name: Verify and stage installer
-        shell: pwsh
-        run: |
-          $installer = Get-ChildItem -Path installer\Output -Filter 'LycanOS-Setup-*.exe' -File | Select-Object -First 1
-          if (-not $installer) { throw 'No installer produced.' }
-          if ($installer.Length -le 0) { throw 'Installer is empty.' }
-          New-Item -ItemType Directory -Force -Path installer\artifacts | Out-Null
-          $staged = Join-Path (Resolve-Path installer\artifacts) 'LycanOS-Setup-0.6.0.exe'
-          Copy-Item $installer.FullName $staged -Force
-          $hash = (Get-FileHash $staged -Algorithm SHA256).Hash
-          "$hash  LycanOS-Setup-0.6.0.exe" | Set-Content (Join-Path (Split-Path $staged) 'SHA256SUMS.txt')
-          Write-Host "Verified installer: $staged ($($installer.Length) bytes)"
-          Write-Host "SHA256: $hash"
-
-      - name: Upload Windows executables
-        uses: actions/upload-artifact@v4
+        run: iscc installer\LycanOS.iss
+      - uses: actions/upload-artifact@v4
         with:
-          name: LycanOS-Windows-Binaries
-          path: installer\payload\*.exe
-          if-no-files-found: error
-
-      - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: LycanOS-Windows-Installer
-          path: installer\artifacts\*
-          if-no-files-found: error
+          name: LycanOS-1.0.0-Windows
+          path: installer/artifacts/LycanOS-Setup-1.0.0.exe

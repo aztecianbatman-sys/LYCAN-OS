@@ -1,46 +1,35 @@
-#define AppName "LYCAN OS"
-#define AppVersion "0.6.0"
-#define AppPublisher "LYCAN"
-#define AppExeName "lycan-vm.exe"
-
 [Setup]
-AppId={{B7C9E0F7-7E1D-4D84-9C7D-5E8A6A9D0422}
-AppName={#AppName}
-AppVersion={#AppVersion}
-AppPublisher={#AppPublisher}
+AppName=LYCAN OS
+AppVersion=1.0.0
 DefaultDirName={autopf}\LYCAN OS
 DefaultGroupName=LYCAN OS
-OutputDir=Output
-OutputBaseFilename=LycanOS-Setup-{#AppVersion}
-Compression=lzma2
-SolidCompression=yes
+OutputDir=artifacts
+OutputBaseFilename=LycanOS-Setup-1.0.0
+ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64
-PrivilegesRequired=admin
+Compression=lzma
+SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayIcon={app}\{#AppExeName}
-DisableProgramGroupPage=yes
+UninstallDisplayIcon={app}\lycan-vm.exe
 
 [Files]
-Source: "payload\lycan-vm.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "payload\lycan-cli.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "payload\store\*"; DestDir: "{app}\store"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "payload\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\build\Release\lycan-vm.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\Release\lycan-cli.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\store\catalog.json"; DestDir: "{app}\store"; Flags: ignoreversion
+Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\data"
-Name: "{app}\data\packages"
 Name: "{app}\logs"
-Name: "{localappdata}\LYCAN OS"
+Name: "{localappdata}\LycanOS\data"
 
 [Icons]
-Name: "{autoprograms}\LYCAN OS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
-Name: "{autodesktop}\LYCAN OS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
-
-[Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
+Name: "{group}\LYCAN OS"; Filename: "{app}\lycan-vm.exe"; WorkingDir: "{app}"
+Name: "{commondesktop}\LYCAN OS"; Filename: "{app}\lycan-vm.exe"; WorkingDir: "{app}"
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "Launch LYCAN OS"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\lycan-vm.exe"; Description: "Launch LYCAN OS"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\logs"
+Type: filesandordirs; Name: "{app}\data"
