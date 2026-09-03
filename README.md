@@ -10,16 +10,61 @@ LYCAN is a Windows-hosted virtual operating environment. It does **not** replace
 - Guest process manager and failure isolation
 - Capability/security policy engine
 - Snapshot save/restore
-- `.lypkg` package manager with manifest, hashes, publisher trust and transactional upgrades
+- `.lypkg` package manager with manifest, hashes, publisher trust, installed-package database and transactional upgrades
 - Native app host and built-in Terminal, Files, Store, Web, Settings and Diagnostics surfaces
 - Polished Win32 desktop shell rendered by LYCAN itself
 - HTTPS package download path with mandatory SHA-256 verification against the Store catalog
 - Windows installer and CI release pipeline
 - Gecko runtime discovery boundary for the real Mozilla engine integration
 
+## Installed-package database
+
+LYCAN maintains a persistent database at the guest path `/system/packages.db`. It is the source of truth for packages installed through the package manager rather than merely scanning `/apps` directories.
+
+Each record stores:
+
+```text
+Package ID
+Version
+Publisher
+Install location
+Install time
+Checksum (SHA-256)
+Previous version
+Permissions
+Entry point
+```
+
+A record conceptually looks like:
+
+```text
+lycan-terminal
+1.0.0
+LYCAN
+/apps/lycan-terminal
+install-time: 1770000000
+sha256:...
+previous: (none)
+permissions: lyfs.read,lyfs.write
+```
+
+The database is rewritten atomically at the package-manager transaction boundary and keeps one current record per package ID. Upgrades preserve the previous version in the `previousVersion` field, while the current archive checksum is recorded for integrity/audit purposes. Permissions come directly from the validated package manifest.
+
+### Terminal `apps`
+
+The Terminal `apps` command now reads the installed-package database and displays actual installed packages, including version, publisher, installation location and requested capabilities:
+
+```text
+ID                 VERSION    PUBLISHER    LOCATION                 PERMISSIONS
+--------------------------------------------------------------------------------
+lycan-terminal     1.0.0      LYCAN        /apps/lycan-terminal     lyfs.read, lyfs.write
+```
+
+This means an application cannot appear in `apps` simply because a random directory exists under `/apps`; it must have a package database record.
+
 ## Package security and transactional installation
 
-Downloaded `.lypkg` archives are never installed merely because they can be opened. The package manager now uses a transaction boundary:
+Downloaded `.lypkg` archives are never installed merely because they can be opened. The package manager uses a transaction boundary:
 
 ```text
 /package-cache/<id>.tmp
