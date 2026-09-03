@@ -1,5 +1,4 @@
 #include "app_host.h"
-#include <sstream>
 namespace lycan {
 AppHost::AppHost(std::filesystem::path root):root_(std::move(root)),fs_(root_/"lyfs"),packages_(fs_,security_),snapshots_(root_/"snapshots"){}
 void AppHost::boot(){
@@ -23,7 +22,7 @@ std::string AppHost::execute(const std::string&cmd){
     }
     if(cmd.rfind("install ",0)==0){
         const auto id=cmd.substr(8);
-        const Package catalog[]={{"terminal","Terminal","1.0.0","LYCAN","Command workspace","builtin"},{"files","Files","1.0.0","LYCAN","LYFS file manager","builtin"},{"web","Web","1.0.0","LYCAN","Mozilla Gecko surface","builtin"},{"snapshots","Snapshots","1.0.0","LYCAN","Save guest state","builtin"},{"diagnostics","Diagnostics","1.0.0","LYCAN","VM and security tools","builtin"},{"crawford","Crawford","1.0.0","LYCAN","AI integration","builtin"}};
+        const Package catalog[]={{"lycan-terminal","Terminal","1.0.0","LYCAN","Native ARES guest command workspace",""},{"lycan-files","Files","1.0.0","LYCAN","LYFS guest file manager",""},{"lycan-web","Web","1.0.0","LYCAN","Mozilla Gecko web surface",""},{"lycan-snapshots","Snapshots","1.0.0","LYCAN","Save and restore guest state",""},{"lycan-diagnostics","Diagnostics","1.0.0","LYCAN","VM health and security inspection",""},{"crawford","Crawford","1.0.0","LYCAN","AI integration boundary for LYCAN apps",""}};
         for(const auto&p:catalog) if(p.id==id) return packages_.install(p)?"installed "+id:"installation rejected";
         return "package not found";
     }
