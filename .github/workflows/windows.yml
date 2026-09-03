@@ -20,33 +20,33 @@ jobs:
       - name: Test LYCAN
         run: ctest --test-dir build-windows -C Release --output-on-failure
 
-      - name: Build Crawford companion
-        shell: cmd
-        run: |
-          cd third_party\crawford-v0.0.24
-          call npm install --no-audit --no-fund
-          call npx electron-builder --win nsis --publish never
-
       - name: Assemble installer payload
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path installer\payload | Out-Null
-          Copy-Item (Get-ChildItem build-windows -Filter lycan-vm.exe -Recurse | Select-Object -First 1).FullName installer\payload\lycan-vm.exe -Force
+          $vm = Get-ChildItem build-windows -Filter lycan-vm.exe -Recurse | Select-Object -First 1
+          if (-not $vm) { throw 'lycan-vm.exe was not produced' }
+          Copy-Item $vm.FullName installer\payload\lycan-vm.exe -Force
           $cli = Get-ChildItem build-windows -Filter lycan-cli.exe -Recurse | Select-Object -First 1
           if ($cli) { Copy-Item $cli.FullName installer\payload\lycan-cli.exe -Force }
-          $craw = Get-ChildItem third_party\crawford-v0.0.24 -Filter 'Crawford*.exe' -Recurse | Where-Object { $_.FullName -notmatch '\\node_modules\\' } | Select-Object -First 1
-          if ($craw) { Copy-Item $craw.FullName installer\payload\Crawford.exe -Force }
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Compile installer
+      - name: Compile LYCAN installer
         shell: cmd
         run: |
           "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" installer\LycanOS.iss
 
-      - name: Upload release installer
+      - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
-          name: LycanOS-Windows
+          name: LycanOS-Windows-Binaries
+          path: |
+            installer\payload\*.exe
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: LycanOS-Windows-Installer
           path: Output\LycanOS-Setup-*.exe
