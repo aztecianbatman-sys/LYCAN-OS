@@ -11,10 +11,12 @@ add_library(lycan_core
     src/core/process.cpp
     src/core/security.cpp
     src/core/snapshot.cpp
+    src/core/settings.cpp
     src/package/package_archive.cpp
     src/package/package_manager.cpp
     src/runtime/app_manager.cpp
     src/runtime/app_host.cpp
+    src/store/store_client.cpp
 )
 target_include_directories(lycan_core PUBLIC src)
 target_compile_definitions(lycan_core PUBLIC LYCAN_VERSION="1.0.0")
