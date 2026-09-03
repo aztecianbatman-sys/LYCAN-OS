@@ -13,9 +13,46 @@ LYCAN is a Windows-hosted virtual operating environment. It does **not** replace
 - `.lypkg` package manager with manifest, hashes, publisher trust and rollback metadata
 - Native app host and built-in Terminal, Files, Store, Web, Settings and Diagnostics surfaces
 - Polished Win32 desktop shell rendered by LYCAN itself
-- HTTPS package download path with checksum verification
+- HTTPS package download path with mandatory SHA-256 verification against the Store catalog
 - Windows installer and CI release pipeline
 - Gecko runtime discovery boundary for the real Mozilla engine integration
+
+## Package security
+
+Downloaded `.lypkg` archives are never installed merely because they can be opened. The package manager follows this order:
+
+```text
+DOWNLOAD
+   ↓
+READ PACKAGE
+   ↓
+CALCULATE SHA-256
+   ↓
+COMPARE WITH CATALOG
+   ↓
+MATCH?
+ ┌─┴─┐
+YES  NO
+ ↓    ↓
+INSTALL  REJECT
+```
+
+The catalog digest is mandatory and must be a valid 64-character SHA-256 value. A missing, malformed, or mismatching digest is a hard failure. Verification occurs **before** package extraction or guest filesystem creation.
+
+A failed verification returns:
+
+```text
+LYCAN SECURITY
+
+Package rejected.
+
+Reason:
+SHA-256 verification failed.
+
+The package was NOT installed.
+```
+
+LYCAN does not report a package as verified unless the calculated archive digest actually matches the catalog digest.
 
 ## Safety boundary
 
