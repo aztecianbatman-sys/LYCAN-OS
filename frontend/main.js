@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 let backend = null;
+let mainWindow = null;
 
 function startBackend() {
   const exe = app.isPackaged ? path.join(process.resourcesPath, 'lycan-backend.exe') : path.join(__dirname, '..', 'build', 'Release', 'lycan-backend.exe');
@@ -29,13 +30,20 @@ function commandVm(command) {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({width: 1500,height: 900,minWidth:1000,minHeight:650,frame:false,backgroundColor:'#04060b',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
-  win.loadFile(path.join(__dirname,'index.html'));
+  mainWindow = new BrowserWindow({width: 1500,height: 900,minWidth:1000,minHeight:650,frame:false,backgroundColor:'#04060b',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 app.whenReady().then(() => {
   startBackend();
   ipcMain.handle('lycan:command', (_event, command) => commandVm(String(command || '')));
+  ipcMain.on('lycan:window', (_event, action) => {
+    if (!mainWindow) return;
+    if (action === 'minimize') mainWindow.minimize();
+    if (action === 'maximize') mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+    if (action === 'close') mainWindow.close();
+  });
   createWindow();
 });
 app.on('window-all-closed', () => { if (backend && !backend.killed) backend.stdin.write('__LYCAN_EXIT__\n'); if (process.platform !== 'darwin') app.quit(); });
