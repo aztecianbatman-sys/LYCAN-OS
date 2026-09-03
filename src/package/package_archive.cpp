@@ -1,0 +1,98 @@
+#include "package_archive.h"
+#include <array>
+#include <cstdint>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <unordered_map>
+
+namespace lycan {
+namespace {
+
+uint32_t crc32(const std::vector<unsigned char>& data) {
+    uint32_t crc = 0xFFFFFFFFu;
+    for (unsigned char c : data) {
+        crc ^= c;
+        for (int i = 0; i < 8; ++i) crc = (crc >> 1) ^ (0xEDB88320u & -(crc & 1u));
+    }
+    return ~crc;
+}
+
+void put16(std::ofstream& f, uint16_t v) { f.put(char(v)); f.put(char(v >> 8)); }
+void put32(std::ofstream& f, uint32_t v) { for (int i=0;i<4;++i) f.put(char(v >> (8*i))); }
+uint16_t get16(const std::vector<unsigned char>& b, size_t& p) { if(p+2>b.size()) throw std::runtime_error("truncated ZIP"); uint16_t v=b[p]|(uint16_t(b[p+1])<<8); p+=2; return v; }
+uint32_t get32(const std::vector<unsigned char>& b, size_t& p) { if(p+4>b.size()) throw std::runtime_error("truncated ZIP"); uint32_t v=uint32_t(b[p])|(uint32_t(b[p+1])<<8)|(uint32_t(b[p+2])<<16)|(uint32_t(b[p+3])<<24); p+=4; return v; }
+
+std::string jsonEscape(const std::string& s) {
+    std::string o; for(char c:s) { if(c=='\\') o+="\\\\"; else if(c=='\"') o+="\\\""; else if(c=='\n') o+="\\n"; else o+=c; } return o;
+}
+std::string manifestJson(const PackageManifest& m) {
+    std::ostringstream o;
+    o << "{\n  \"id\": \"" << jsonEscape(m.id) << "\",\n"
+      << "  \"name\": \"" << jsonEscape(m.name) << "\",\n"
+      << "  \"version\": \"" << jsonEscape(m.version) << "\",\n"
+      << "  \"publisher\": \"" << jsonEscape(m.publisher) << "\",\n"
+      << "  \"entry\": \"" << jsonEscape(m.entry) << "\",\n  \"permissions\": [";
+    for(size_t i=0;i<m.permissions.size();++i) { if(i) o<<", "; o<<"\""<<jsonEscape(m.permissions[i])<<"\""; }
+    o << "]\n}\n"; return o.str();
+}
+std::string jsonValue(const std::string& j, const std::string& key) {
+    std::string needle="\""+key+"\""; auto k=j.find(needle); if(k==std::string::npos) return {};
+    auto c=j.find(':',k+needle.size()); if(c==std::string::npos) return {}; auto q=j.find('"',c+1); if(q==std::string::npos) return {};
+    std::string v; bool esc=false; for(size_t i=q+1;i<j.size();++i){char x=j[i]; if(esc){ if(x=='n')v+='\n'; else v+=x; esc=false; } else if(x=='\\')esc=true; else if(x=='"')break; else v+=x; } return v;
+}
+PackageManifest parseManifest(const std::string& j) {
+    PackageManifest m; m.id=jsonValue(j,"id"); m.name=jsonValue(j,"name"); m.version=jsonValue(j,"version"); m.publisher=jsonValue(j,"publisher"); m.entry=jsonValue(j,"entry");
+    auto p=j.find("\"permissions\""); if(p!=std::string::npos){ auto a=j.find('[',p); auto z=j.find(']',a); if(a!=std::string::npos&&z!=std::string::npos){ std::string s=j.substr(a+1,z-a-1); size_t q=0; while((q=s.find('"',q))!=std::string::npos){size_t e=s.find('"',q+1); if(e==std::string::npos)break; m.permissions.push_back(s.substr(q+1,e-q-1)); q=e+1;} } }
+    return m;
+}
+
+struct ZipEntry { std::string name; uint32_t crc{}, size{}, offset{}; };
+
+bool readAll(const std::filesystem::path& p, std::vector<unsigned char>& out) {
+    std::ifstream f(p,std::ios::binary); if(!f)return false; f.seekg(0,std::ios::end); auto n=f.tellg(); f.seekg(0); if(n<0)return false; out.resize(static_cast<size_t>(n)); return out.empty()||bool(f.read(reinterpret_cast<char*>(out.data()),n));
+}
+
+bool parseZip(const std::filesystem::path& p, std::vector<PackageEntry>& entries, std::string& error) {
+    std::vector<unsigned char>b; if(!readAll(p,b)){error="cannot read package";return false;}
+    try {
+        size_t eocd=std::string::npos; size_t start=b.size()>65557?b.size()-65557:0;
+        for(size_t i=b.size();i-- > start;) if(i+4<=b.size()&&b[i]=='P'&&b[i+1]=='K'&&b[i+2]==5&&b[i+3]==6){eocd=i;break;}
+        if(eocd==std::string::npos){error="invalid LYPKG: ZIP footer missing";return false;}
+        size_t ep=eocd+4; uint16_t disk=get16(b,ep), cdDisk=get16(b,ep), countDisk=get16(b,ep), count=get16(b,ep); uint32_t cdSize=get32(b,ep), cdOffset=get32(b,ep); (void)disk;(void)cdDisk;(void)countDisk;
+        if(count>10000 || size_t(cdOffset)+cdSize>b.size()){error="invalid LYPKG central directory";return false;}
+        size_t pos=cdOffset;
+        for(uint16_t i=0;i<count;++i){ if(get32(b,pos)!=0x02014b50u){error="invalid LYPKG entry";return false;} pos+=2+2+2+2+2+2; uint32_t crc=get32(b,pos), comp=get32(b,pos), raw=get32(b,pos); uint16_t nl=get16(b,pos), xl=get16(b,pos), cl=get16(b,pos); pos+=2+2+4+4; uint32_t off=get32(b,pos); if(comp!=0){error="compressed LYPKG entries are unsupported";return false;} if(pos+nl+xl+cl>b.size()||size_t(off)+30>b.size()) {error="invalid LYPKG bounds";return false;} std::string name(reinterpret_cast<const char*>(&b[pos]),nl); pos+=nl+xl+cl; size_t lp=off+4; lp+=2+2+2+2+2+2; uint32_t lcrc=get32(b,lp), lcomp=get32(b,lp), lraw=get32(b,lp); uint16_t lnl=get16(b,lp), lxl=get16(b,lp); lp+=lnl+lxl; if(lcomp!=0||lraw!=raw||lcrc!=crc||lp+raw>b.size()){error="invalid LYPKG local entry";return false;} entries.push_back({name,std::vector<unsigned char>(b.begin()+lp,b.begin()+lp+raw)}); if(crc32(entries.back().data)!=crc){error="LYPKG CRC mismatch for "+name;return false;} }
+        return true;
+    } catch(const std::exception& ex){error=ex.what();return false;}
+}
+
+} // namespace
+
+bool PackageArchive::create(const std::filesystem::path& output,const PackageManifest& manifest,const std::vector<PackageEntry>& appFiles,std::string& error) {
+    if(manifest.id.empty()||manifest.name.empty()||manifest.version.empty()||manifest.publisher.empty()||manifest.entry.empty()){error="manifest is missing required fields";return false;}
+    std::vector<PackageEntry> files; files.push_back({"manifest.json",std::vector<unsigned char>(manifestJson(manifest).begin(),manifestJson(manifest).end())});
+    std::ostringstream checks;
+    for(const auto& e:appFiles){ if(e.path.empty()||e.path.find("..")!=std::string::npos||e.path.front()=='/') {error="unsafe package path: "+e.path;return false;} files.push_back({"app/"+e.path,e.data}); checks<<sha256(e.data)<<"  "<<"app/"<<e.path<<"\n"; }
+    auto c=checks.str(); files.push_back({"checksums.sha256",std::vector<unsigned char>(c.begin(),c.end())});
+    std::ofstream f(output,std::ios::binary|std::ios::trunc); if(!f){error="cannot create package";return false;}
+    struct Central{std::string n;uint32_t crc,size,off;}; std::vector<Central> central;
+    for(const auto&e:files){uint32_t off=uint32_t(f.tellp()); put32(f,0x04034b50);put16(f,20);put16(f,0);put16(f,0);put16(f,0);put16(f,0);put32(f,crc32(e.data));put32(f,uint32_t(e.data.size()));put32(f,uint32_t(e.data.size()));put16(f,uint16_t(e.path.size()));put16(f,0);f.write(e.path.data(),e.path.size());if(!e.data.empty())f.write(reinterpret_cast<const char*>(e.data.data()),e.data.size());central.push_back({e.path,crc32(e.data),uint32_t(e.data.size()),off});}
+    uint32_t cdOff=uint32_t(f.tellp()); for(const auto&e:central){put32(f,0x02014b50);put16(f,20);put16(f,20);put16(f,0);put16(f,0);put16(f,0);put16(f,0);put32(f,e.crc);put32(f,e.size);put32(f,e.size);put16(f,uint16_t(e.n.size()));put16(f,0);put16(f,0);put16(f,0);put16(f,0);put32(f,0);put32(f,e.off);f.write(e.n.data(),e.n.size());} uint32_t cdSize=uint32_t(f.tellp())-cdOff; put32(f,0x06054b50);put16(f,0);put16(f,0);put16(f,uint16_t(central.size()));put16(f,uint16_t(central.size()));put32(f,cdSize);put32(f,cdOff);put16(f,0); return bool(f);
+}
+
+bool PackageArchive::inspect(const std::filesystem::path& package,PackageManifest& manifest,std::vector<PackageEntry>& entries,std::string& error){entries.clear();if(!parseZip(package,entries,error))return false;for(const auto&e:entries)if(e.path=="manifest.json"){manifest=parseManifest(std::string(e.data.begin(),e.data.end()));return !manifest.id.empty();}error="manifest.json missing";return false;}
+
+bool PackageArchive::extract(const std::filesystem::path& package,const std::filesystem::path& destination,PackageManifest& manifest,std::string& error){std::vector<PackageEntry> entries;if(!inspect(package,manifest,entries,error))return false;std::filesystem::create_directories(destination);for(const auto&e:entries){if(e.path=="manifest.json"||e.path=="checksums.sha256")continue; if(e.path.rfind("app/",0)!=0||e.path.find("..")!=std::string::npos){error="unsafe package entry";return false;}auto out=destination/e.path.substr(4);std::filesystem::create_directories(out.parent_path());std::ofstream f(out,std::ios::binary);if(!f){error="cannot extract "+e.path;return false;}f.write(reinterpret_cast<const char*>(e.data.data()),e.data.size());}return true;}
+
+std::string PackageArchive::sha256(const std::vector<unsigned char>& data){
+    // SHA-256, self-contained so package verification has no external dependency.
+    uint32_t h[8]={0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
+    const uint32_t k[64]={0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66b,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xe35801d5,0x106aa070,0x19a4c116,0x1e376c1a,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2};
+    auto rotr=[](uint32_t x,int n){return (x>>n)|(x<<(32-n));}; std::vector<unsigned char>d=data; uint64_t bits=uint64_t(d.size())*8; d.push_back(0x80);while(d.size()%64!=56)d.push_back(0);for(int i=7;i>=0;--i)d.push_back(unsigned char(bits>>(i*8)));
+    for(size_t off=0;off<d.size();off+=64){uint32_t w[64]{};for(int i=0;i<16;++i)w[i]=uint32_t(d[off+i*4])<<24|uint32_t(d[off+i*4+1])<<16|uint32_t(d[off+i*4+2])<<8|d[off+i*4+3];for(int i=16;i<64;++i){uint32_t s0=rotr(w[i-15],7)^rotr(w[i-15],18)^(w[i-15]>>3);uint32_t s1=rotr(w[i-2],17)^rotr(w[i-2],19)^(w[i-2]>>10);w[i]=w[i-16]+s0+w[i-7]+s1;}uint32_t a=h[0],b=h[1],c=h[2],e=h[4],f=h[5],g=h[6],x=h[3],i=h[7];for(int n=0;n<64;++n){uint32_t S1=rotr(e,6)^rotr(e,11)^rotr(e,25),ch=(e&f)^((~e)&g),t1=i+S1+ch+k[n]+w[n];uint32_t S0=rotr(a,2)^rotr(a,13)^rotr(a,22),maj=(a&b)^(a&c)^(b&c),t2=S0+maj;i=g;g=f;f=e;e=x+t1;x=c;c=b;b=a;a=t1+t2;}h[0]+=a;h[1]+=b;h[2]+=c;h[3]+=x;h[4]+=e;h[5]+=f;h[6]+=g;h[7]+=i;}
+    std::ostringstream o;for(auto v:h)o<<std::hex<<std::setfill('0')<<std::setw(8)<<v;return o.str();
+}
+std::string PackageArchive::sha256File(const std::filesystem::path& path){std::vector<unsigned char>d;if(!readAll(path,d))return {};return sha256(d);}
+
+} // namespace lycan
