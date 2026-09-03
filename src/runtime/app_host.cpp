@@ -3,11 +3,12 @@
 namespace lycan {
 AppHost::AppHost(std::filesystem::path root):root_(std::move(root)),fs_(root_/"lyfs"),packages_(fs_,security_),snapshots_(root_/"snapshots"){}
 void AppHost::boot(){
-    // Formatting is idempotent directory initialization; it must never erase guest data.
+    // Directory initialization is idempotent and never erases existing guest data.
     fs_.format();
     security_.trustPublisher("LYCAN");
     processes_.spawn("init",8192); processes_.spawn("desktop",16384); vm_.boot();
-    if(!fs_.readText("/home/Welcome.txt",*new std::string)) fs_.writeText("/home/Welcome.txt","Welcome to LYCAN OS 1.0\nThis is a virtual guest environment hosted by Windows.\n");
+    std::string welcome;
+    if(!fs_.readText("/home/Welcome.txt",welcome)) fs_.writeText("/home/Welcome.txt","Welcome to LYCAN OS 1.0\nThis is a virtual guest environment hosted by Windows.\n");
 }
 std::string AppHost::execute(const std::string&cmd){
     if(cmd=="help")return "help  ls  cat <path>  write <path> <text>  ps  vm  apps  install <id>  uninstall <id>  clear";
