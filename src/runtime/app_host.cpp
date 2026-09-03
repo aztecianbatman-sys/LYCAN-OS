@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <sstream>
+#include <cctype>
 
 namespace lycan {
 namespace {
@@ -22,13 +23,14 @@ const std::array<Package,6>& builtins(){
 std::string upperState(const std::string&s){std::string r=s;std::transform(r.begin(),r.end(),r.begin(),[](unsigned char c){return static_cast<char>(std::toupper(c));});return r;}
 }
 
-AppHost::AppHost(std::filesystem::path root):root_(std::move(root)),fs_(root_/"lyfs"),packages_(fs_,security_,&processes_),snapshots_(root_/"snapshots"){}
+AppHost::AppHost(std::filesystem::path root):root_(std::move(root)),fs_(root_/"lyfs"),packages_(fs_,security_,&processes_),snapshots_(root_/"snapshots"),applications_(processes_,packages_){}
 
 void AppHost::boot(){
     fs_.format(); security_.trustPublisher("LYCAN");
     for(const auto& app:builtins()){
         bool present=false;for(const auto&p:packages_.installed())if(p.id==app.id){present=true;break;}
         if(!present)packages_.install(app);
+        applications_.registerPackageSurface(app);
     }
     if(!processes_.findApp("init"))processes_.spawn("init",8192);
     if(!processes_.findApp("desktop"))processes_.spawn("desktop",16384);
@@ -37,13 +39,17 @@ void AppHost::boot(){
 }
 
 std::string AppHost::execute(const std::string&cmd){
-    if(cmd=="help")return "help  ls  cat <path>  write <path> <text>  ps  launcher  apps  open <id>  suspend <pid>  resume <pid>  close <id>  install <id>  uninstall <id>  clear";
+    if(cmd=="help")return "help  ls  cat <path>  write <path> <text>  ps  launcher  apps  sessions  open <id>  suspend <pid>  resume <pid>  close <id>  install <id>  uninstall <id>  clear";
     if(cmd=="ls"){std::string s;for(auto&e:fs_.list("/home"))s+=e.path+"\n";return s.empty()?"(empty)":s;}
     if(cmd.rfind("cat ",0)==0){std::string s;return fs_.readText(cmd.substr(4),s)?s:"file not found";}
     if(cmd.rfind("write ",0)==0){auto p=cmd.find(' ',6);if(p==std::string::npos)return"usage: write /path text";return fs_.writeText(cmd.substr(6,p-6),cmd.substr(p+1))?"written":"write failed";}
     if(cmd=="ps"){
         std::string s="PID   NAME                 STATE       APP\n";s+="-----------------------------------------------\n";
         for(const auto&p:processes_.list())s+=std::to_string(p.pid)+"   "+p.name+"                 "+upperState(p.state)+"   "+(p.appId.empty()?"-":p.appId)+"\n";return s;
+    }
+    if(cmd=="sessions"){
+        const auto list=applications_.sessions();if(list.empty())return "(no application sessions)";std::string s="PID   APP                  SURFACE      WINDOW\n";s+="------------------------------------------------\n";
+        for(const auto& a:list)s+=std::to_string(a.pid)+"   "+a.appId+"   "+appSurfaceName(a.surface)+"   "+(a.windowOpen?"OPEN":"CLOSED")+"\n";return s;
     }
     if(cmd=="launcher"){
         auto list=packages_.launcherApps();if(list.empty())return "(launcher empty)";std::string s="LYCAN LAUNCHER\n------------------------------\n";
@@ -53,15 +59,15 @@ std::string AppHost::execute(const std::string&cmd){
         auto list=packages_.installed();if(list.empty())return "(no packages installed)";std::string s="ID                 VERSION    PUBLISHER    LOCATION                 PERMISSIONS\n";s+="--------------------------------------------------------------------------------\n";
         for(const auto&p:list){std::string perms;for(size_t i=0;i<p.permissions.size();++i){if(i)perms+=", ";perms+=p.permissions[i];}s+=p.id+"  "+p.version+"  "+p.publisher+"  "+p.installLocation+"  "+(perms.empty()?"(none)":perms)+"\n";}return s;
     }
-    if(cmd.rfind("open ",0)==0||cmd.rfind("launch ",0)==0){auto pos=cmd.find(' ');auto id=cmd.substr(pos+1);for(const auto&p:packages_.launcherApps())if(p.id==id){auto pid=processes_.launchApp(p.id,p.entry);return pid?"opened "+p.name+" (PID "+std::to_string(pid)+")":"launch failed";}return "app not installed or not registered with launcher";}
+    if(cmd.rfind("open ",0)==0||cmd.rfind("launch ",0)==0){auto pos=cmd.find(' ');auto id=cmd.substr(pos+1);for(const auto&p:packages_.launcherApps())if(p.id==id){auto pid=applications_.open(p.id);return pid?"opened "+p.name+" (PID "+std::to_string(pid)+", surface "+appSurfaceName(applications_.surfaceFor(p.id))+")":"launch failed";}return "app not installed or not registered with launcher";}
     if(cmd.rfind("suspend ",0)==0){try{return processes_.suspend(static_cast<uint32_t>(std::stoul(cmd.substr(8))))?"suspended":"process not found";}catch(...){return"invalid pid";}}
     if(cmd.rfind("resume ",0)==0){try{return processes_.resume(static_cast<uint32_t>(std::stoul(cmd.substr(7))))?"resumed":"process not found";}catch(...){return"invalid pid";}}
-    if(cmd.rfind("close ",0)==0)return processes_.closeApp(cmd.substr(6))?"closed":"app not running";
+    if(cmd.rfind("close ",0)==0){return applications_.close(cmd.substr(6))?"closed":"app not running";}
     if(cmd=="vm")return vm_.cpu().state();
-    if(cmd.rfind("install ",0)==0){const auto id=cmd.substr(8);for(const auto&p:builtins())if(p.id==id)return packages_.install(p)?"installed "+id:"installation rejected";return "package not found";}
-    if(cmd.rfind("uninstall ",0)==0)return packages_.uninstall(cmd.substr(10))?"uninstalled":"uninstall failed";
+    if(cmd.rfind("install ",0)==0){const auto id=cmd.substr(8);for(const auto&p:builtins())if(p.id==id){if(!packages_.install(p))return "installation rejected";applications_.registerPackageSurface(p);return "installed "+id;}return "package not found";}
+    if(cmd.rfind("uninstall ",0)==0){const auto id=cmd.substr(10);applications_.close(id);return packages_.uninstall(id)?"uninstalled":"uninstall failed";}
     if(cmd=="clear")return "\x1b[2J\x1b[H";
     return "unknown command";
 }
-AresVm& AppHost::vm(){return vm_;} Lyfs& AppHost::fs(){return fs_;} ProcessManager& AppHost::processes(){return processes_;} SecurityPolicy& AppHost::security(){return security_;} PackageManager& AppHost::packages(){return packages_;} SnapshotManager& AppHost::snapshots(){return snapshots_;}
+AresVm& AppHost::vm(){return vm_;} Lyfs& AppHost::fs(){return fs_;} ProcessManager& AppHost::processes(){return processes_;} SecurityPolicy& AppHost::security(){return security_;} PackageManager& AppHost::packages(){return packages_;} SnapshotManager& AppHost::snapshots(){return snapshots_;} ApplicationManager& AppHost::apps(){return applications_;}
 }
