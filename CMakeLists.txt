@@ -6,10 +6,22 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(LYCAN_BUILD_TESTS "Build LYCAN tests" ON)
 option(LYCAN_BUILD_CLI "Build the LYCAN CLI" ON)
 add_library(lycan_core
- src/core/ares_vm.cpp src/core/ares_hardware.cpp src/core/lyfs.cpp src/core/process.cpp src/core/security.cpp src/core/snapshot.cpp src/core/settings.cpp
- src/package/package_archive.cpp src/package/package_manager.cpp
- src/runtime/app_manager.cpp src/runtime/app_host.cpp src/runtime/app_runtime.cpp src/runtime/gecko_runtime.cpp src/runtime/window_manager.cpp
- src/store/store_client.cpp src/recovery/recovery_manager.cpp)
+ src/core/ares_vm.cpp
+ src/core/ares_hardware.cpp
+ src/core/lyfs.cpp
+ src/core/process.cpp
+ src/core/security.cpp
+ src/core/snapshot.cpp
+ src/core/settings.cpp
+ src/package/package_archive.cpp
+ src/package/package_manager.cpp
+ src/runtime/app_manager.cpp
+ src/runtime/app_host.cpp
+ src/runtime/app_runtime.cpp
+ src/runtime/gecko_runtime.cpp
+ src/runtime/window_manager.cpp
+ src/store/store_client.cpp
+ src/recovery/recovery_manager.cpp)
 target_include_directories(lycan_core PUBLIC src)
 target_compile_definitions(lycan_core PUBLIC LYCAN_VERSION="1.0.0")
 if(WIN32)
@@ -38,7 +50,9 @@ if(LYCAN_BUILD_TESTS)
  add_test(NAME lycan-runtime-tests COMMAND lycan-runtime-tests)
 endif()
 install(TARGETS lycan-vm RUNTIME DESTINATION bin)
-if(LYCAN_BUILD_CLI) install(TARGETS lycan-cli RUNTIME DESTINATION bin) endif()
+if(LYCAN_BUILD_CLI)
+ install(TARGETS lycan-cli RUNTIME DESTINATION bin)
+endif()
 install(FILES tools/lycan_sdk.py DESTINATION sdk)
 install(DIRECTORY store/ DESTINATION store)
 install(DIRECTORY docs/ DESTINATION docs)
