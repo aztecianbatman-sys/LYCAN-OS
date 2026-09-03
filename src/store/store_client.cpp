@@ -1,0 +1,34 @@
+#include "store_client.h"
+#include <fstream>
+#include <algorithm>
+#include <cctype>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <winhttp.h>
+#endif
+namespace lycan {
+StoreClient::StoreClient(PackageManager& packages):packages_(packages){}
+bool StoreClient::httpsUrl(const std::string& u){if(u.size()<9||u.compare(0,8,"https://")!=0)return false;auto p=u.find('/',8);auto host=u.substr(8,p==std::string::npos?std::string::npos:p-8);return !host.empty()&&host.find_first_of("\\ \t\r\n") == std::string::npos;}
+static std::string jsonValue(const std::string& obj,const std::string& field){std::string key="\""+field+"\"";auto k=obj.find(key);if(k==std::string::npos)return{};auto c=obj.find(':',k+key.size());if(c==std::string::npos)return{};auto q=obj.find('"',c+1);if(q==std::string::npos)return{};auto e=q+1;while(e<obj.size()){if(obj[e]=='"'&&obj[e-1]!='\\')break;if(obj[e]=='\\'&&e+1<obj.size())e+=2;else ++e;}if(e>=obj.size())return{};return obj.substr(q+1,e-q-1);}
+bool StoreClient::catalogField(const std::string& json,const std::string& id,const std::string& field,std::string& out){std::string needle="\"id\"\s*";auto pos=json.find("\"id\"");while(pos!=std::string::npos){auto end=json.find('}',pos);if(end==std::string::npos)break;auto obj=json.substr(pos,end-pos+1);if(jsonValue(obj,"id")==id){out=jsonValue(obj,field);return !out.empty();}pos=json.find("\"id\"",end+1);}return false;}
+#ifdef _WIN32
+bool StoreClient::downloadHttps(const std::string& url,const std::filesystem::path& destination,std::string& error){
+    URL_COMPONENTSA uc{};uc.dwStructSize=sizeof(uc);char host[256]{},path[2048]{};uc.lpszHostName=host;uc.dwHostNameLength=sizeof(host);uc.lpszUrlPath=path;uc.dwUrlPathLength=sizeof(path);
+    if(!WinHttpCrackUrl(url.c_str(),0,0,&uc)||uc.nScheme!=INTERNET_SCHEME_HTTPS){error="URL is not HTTPS";return false;}
+    HINTERNET session=WinHttpOpen(L"LYCAN-Store/1.0",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,nullptr,nullptr,0);if(!session){error="WinHTTP initialization failed";return false;}
+    std::wstring wh;for(size_t i=0;i<uc.dwHostNameLength;++i)wh.push_back(char(host[i]));std::wstring wp;for(size_t i=0;i<uc.dwUrlPathLength;++i)wp.push_back(char(path[i]));
+    HINTERNET conn=WinHttpConnect(session,wh.c_str(),uc.nPort,0);if(!conn){error="HTTPS connection failed";WinHttpCloseHandle(session);return false;}
+    HINTERNET req=WinHttpOpenRequest(conn,L"GET",wp.c_str(),nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE);if(!req){error="request creation failed";WinHttpCloseHandle(conn);WinHttpCloseHandle(session);return false;}
+    bool ok=false; if(WinHttpSendRequest(req,WINHTTP_NO_ADDITIONAL_HEADERS,0,WINHTTP_NO_REQUEST_DATA,0,0,0)&&WinHttpReceiveResponse(req,nullptr)){
+        DWORD status=0,len=sizeof(status);WinHttpQueryHeaders(req,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,WINHTTP_HEADER_NAME_BY_INDEX,&status,&len,WINHTTP_NO_HEADER_INDEX);
+        if(status==200){std::error_code ec;std::filesystem::create_directories(destination.parent_path(),ec);std::ofstream out(destination,std::ios::binary|std::ios::trunc);if(out){ok=true;for(;;){DWORD avail=0;if(!WinHttpQueryDataAvailable(req,&avail)||!avail)break;std::string buf(avail,'\0');DWORD got=0;if(!WinHttpReadData(req,buf.data(),avail,&got)||!got){ok=false;break;}out.write(buf.data(),got);if(!out){ok=false;break;}}}}
+        else error="HTTP status "+std::to_string(status);
+    }else error="HTTPS request failed";
+    WinHttpCloseHandle(req);WinHttpCloseHandle(conn);WinHttpCloseHandle(session);if(!ok)std::filesystem::remove(destination);return ok;
+}
+#else
+bool StoreClient::downloadHttps(const std::string&,const std::filesystem::path&,std::string& error){error="HTTPS Store downloads require the Windows runtime in this build";return false;}
+#endif
+StoreResult StoreClient::installFromCatalog(const std::string& catalogJson,const std::string& packageId,const std::filesystem::path& cacheDir){StoreResult r;std::string url;if(!catalogField(catalogJson,packageId,"url",url)){r.message="package has no downloadable URL";return r;}if(!httpsUrl(url)){r.message="package URL rejected: HTTPS is required";return r;}std::string version;if(!catalogField(catalogJson,packageId,"version",version)){r.message="catalog entry has no version";return r;}auto archive=cacheDir/(packageId+"-"+version+".lypkg");std::string error;if(!downloadHttps(url,archive,error)){r.message=error;return r;}if(!packages_.installArchiveFromCatalog(archive,catalogJson,&error)){r.message=error.empty()?"package installation rejected":error;std::filesystem::remove(archive);return r;}r.ok=true;r.archive=archive;r.message="installed "+packageId+" "+version;return r;}
+}
