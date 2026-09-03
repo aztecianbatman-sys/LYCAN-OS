@@ -35,7 +35,6 @@ int main(){
         "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"));
     assert(!lycan::PackageManager::verifySha256("", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
 
-    // End-to-end rejection test: a modified downloaded package must fail before extraction.
     const auto root=std::filesystem::temp_directory_path()/"lycan-sha-test";
     std::error_code ec;
     std::filesystem::remove_all(root,ec);
@@ -46,7 +45,28 @@ int main(){
     assert(lycan::PackageArchive::create(package,manifest,{{"app.bin",{'O','K'}}},createError));
     const auto expected=lycan::PackageManager::packageSha256(package);
 
-    std::fstream tamper(package,std::ios::in|std::ios::out|std::ios::binary);
+    // The catalog is the source of truth for the archive digest.
+    const std::string catalog="{\"name\":\"LYCAN OS Store\",\"apps\":[{\"id\":\"sha-test\",\"version\":\"1.0.0\",\"sha256\":\""+expected+"\"}]}";
+    assert(lycan::PackageManager::catalogSha256(catalog,"sha-test","1.0.0")==expected);
+    assert(lycan::PackageManager::catalogSha256(catalog,"sha-test","9.9.9").empty());
+
+    lycan::Lyfs fs(root/"guest");
+    assert(fs.format());
+    lycan::SecurityPolicy security;
+    security.trustPublisher("LYCAN");
+    lycan::PackageManager manager(fs,security);
+
+    // A matching catalog digest permits installation.
+    std::string error;
+    assert(manager.installArchiveFromCatalog(package,catalog,&error));
+    assert(std::filesystem::exists(fs.hostPath("/apps/sha-test/app.bin")));
+    assert(std::filesystem::exists(fs.hostPath("/apps/sha-test/manifest.json")));
+
+    // Tamper with a fresh archive after recording its catalog digest.
+    const auto tampered=root/"tampered.lypkg";
+    assert(lycan::PackageArchive::create(tampered,manifest,{{"app.bin",{'O','K'}}},createError));
+    const auto tamperedExpected=lycan::PackageManager::packageSha256(tampered);
+    std::fstream tamper(tampered,std::ios::in|std::ios::out|std::ios::binary);
     tamper.seekp(0,std::ios::end);
     auto size=tamper.tellp();
     tamper.seekp(size-1);
@@ -54,18 +74,20 @@ int main(){
     tamper.write(&byte,1);
     tamper.close();
 
-    lycan::Lyfs fs(root/"guest");
-    assert(fs.format());
-    lycan::SecurityPolicy security;
-    security.trustPublisher("LYCAN");
-    lycan::PackageManager manager(fs,security);
-    std::string error;
-    assert(!manager.installArchive(package,expected,&error));
+    std::string tamperedCatalog="{\"apps\":[{\"id\":\"sha-test\",\"version\":\"1.0.0\",\"sha256\":\""+tamperedExpected+"\"}]}";
+    assert(!manager.installArchiveFromCatalog(tampered,tamperedCatalog,&error));
     assert(error.find("SHA-256 verification failed")!=std::string::npos);
     assert(error.find("The package was NOT installed.")!=std::string::npos);
-    assert(!std::filesystem::exists(fs.hostPath("/apps/sha-test/manifest.json")));
-    std::filesystem::remove_all(root,ec);
 
+    // Missing/blank catalog digests are never treated as verified.
+    const auto missing=root/"missing.lypkg";
+    assert(lycan::PackageArchive::create(missing,manifest,{{"app.bin",{'O','K'}}},createError));
+    const auto before=fs.usedBytes();
+    assert(!manager.installArchiveFromCatalog(missing,"{\"apps\":[{\"id\":\"sha-test\",\"version\":\"1.0.0\",\"sha256\":\"\"}]}",&error));
+    assert(error.find("SHA-256 verification failed")!=std::string::npos);
+    assert(fs.usedBytes()==before);
+
+    std::filesystem::remove_all(root,ec);
     std::cout<<"LYCAN 1.0 tests passed (including SHA-256 package verification)\n";
     return 0;
 }
