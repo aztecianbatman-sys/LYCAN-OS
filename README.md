@@ -10,36 +10,42 @@ LYCAN is a Windows-hosted virtual operating environment. It does **not** replace
 - Guest process manager and failure isolation
 - Capability/security policy engine
 - Snapshot save/restore
-- `.lypkg` package manager with manifest, hashes, publisher trust and rollback metadata
+- `.lypkg` package manager with manifest, hashes, publisher trust and transactional upgrades
 - Native app host and built-in Terminal, Files, Store, Web, Settings and Diagnostics surfaces
 - Polished Win32 desktop shell rendered by LYCAN itself
 - HTTPS package download path with mandatory SHA-256 verification against the Store catalog
 - Windows installer and CI release pipeline
 - Gecko runtime discovery boundary for the real Mozilla engine integration
 
-## Package security
+## Package security and transactional installation
 
-Downloaded `.lypkg` archives are never installed merely because they can be opened. The package manager follows this order:
+Downloaded `.lypkg` archives are never installed merely because they can be opened. The package manager now uses a transaction boundary:
 
 ```text
-DOWNLOAD
-   ↓
-READ PACKAGE
-   ↓
-CALCULATE SHA-256
-   ↓
-COMPARE WITH CATALOG
-   ↓
-MATCH?
- ┌─┴─┐
-YES  NO
- ↓    ↓
-INSTALL  REJECT
+/package-cache/<id>.tmp
+        ↓
+   verify SHA-256
+        ↓
+      extract
+        ↓
+ validate staged manifest
+        ↓
+   check publisher
+        ↓
+ stage application
+        ↓
+ backup previous version
+        ↓
+      commit
+        ↓
+    INSTALLED
 ```
 
-The catalog digest is mandatory and must be a valid 64-character SHA-256 value. A missing, malformed, or mismatching digest is a hard failure. Verification occurs **before** package extraction or guest filesystem creation.
+The live `/apps/<id>` directory is not modified while a package is being downloaded, verified, extracted, or validated. Extraction happens in an isolated temporary staging directory. Only after validation succeeds is the previous application moved to a same-filesystem backup and the staged directory promoted to `/apps/<id>`.
 
-A failed verification returns:
+If a transaction fails before commit, staging is deleted and the previous version is untouched. If a failure occurs after the application swap, the package manager removes the new version and restores the backup. The package database is protected during the transaction as well, so a failed database update triggers filesystem rollback instead of leaving an unrecorded application behind.
+
+The Store SHA-256 digest remains mandatory and is verified **before staging**. A missing, malformed, or mismatching digest is a hard security failure:
 
 ```text
 LYCAN SECURITY
