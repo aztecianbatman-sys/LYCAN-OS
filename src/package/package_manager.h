@@ -19,9 +19,18 @@ public:
                         const std::string& expectedSha256,
                         std::string* error = nullptr);
 
+    // Full Store path: read package metadata, find its catalog digest, then verify
+    // the downloaded archive before allowing installation.
+    bool installArchiveFromCatalog(const std::filesystem::path& package,
+                                   const std::string& catalogJson,
+                                   std::string* error = nullptr);
+
     static std::string packageSha256(const std::filesystem::path& package);
     static bool verifySha256(const std::string& calculated,
                              const std::string& expected);
+    static std::string catalogSha256(const std::string& catalogJson,
+                                     const std::string& id,
+                                     const std::string& version);
 
     bool inspectArchive(const std::filesystem::path& package, Package& pkg, std::string* error = nullptr) const;
     bool uninstall(const std::string& id);
