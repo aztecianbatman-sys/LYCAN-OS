@@ -1,0 +1,6 @@
+build/
+frontend/node_modules/
+frontend/dist/
+lycan-data/
+*.user
+*.suo

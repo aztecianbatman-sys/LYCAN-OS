@@ -1,30 +1,35 @@
-name: Windows build
+name: LYCAN Windows release
 on:
   push:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
 jobs:
-  build:
+  release:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
+      - name: Configure native VM
         run: cmake -S . -B build -A x64
-      - name: Build
+      - name: Build native VM
         run: cmake --build build --config Release --parallel
-      - name: Test
+      - name: Run native tests
         run: ctest --test-dir build -C Release --output-on-failure
-      - name: Install Inno Setup
-        shell: powershell
-        run: choco install innosetup -y --no-progress
-      - name: Package installer
-        shell: cmd
-        run: iscc installer\LycanOS.iss
-      - name: Verify installer
-        shell: powershell
-        run: if (!(Test-Path installer\artifacts\LycanOS-Setup-1.0.0.exe)) { throw 'Installer missing' }
-      - uses: actions/upload-artifact@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
         with:
-          name: LycanOS-1.0.0-Windows
-          path: installer/artifacts/LycanOS-Setup-1.0.0.exe
+          node-version: 22
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+      - name: Build LYCAN desktop installer
+        working-directory: frontend
+        run: npm run build:win
+      - name: Verify setup exists
+        shell: powershell
+        run: if (!(Test-Path 'frontend\dist\LYCAN-OS-1.0.0-Setup-x64.exe')) { throw 'LYCAN setup installer was not produced' }
+      - name: Upload setup installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: LYCAN-OS-1.0.0-Windows-x64
+          path: frontend/dist/LYCAN-OS-1.0.0-Setup-x64.exe
