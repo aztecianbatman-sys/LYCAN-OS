@@ -38,15 +38,33 @@ jobs:
         run: |
           "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" installer\LycanOS.iss
 
+      - name: Verify and stage installer
+        shell: pwsh
+        run: |
+          $candidates = @()
+          $candidates += @(Get-ChildItem -Path installer -Recurse -Filter 'LycanOS-Setup-*.exe' -File -ErrorAction SilentlyContinue)
+          $candidates += @(Get-ChildItem -Path Output -Filter 'LycanOS-Setup-*.exe' -File -ErrorAction SilentlyContinue)
+          $installer = $candidates | Select-Object -First 1
+          if (-not $installer) { throw 'Inno Setup completed but no LycanOS-Setup-*.exe was found.' }
+          if ($installer.Extension -ne '.exe') { throw "Installer has unexpected extension: $($installer.Extension)" }
+          if ($installer.Length -le 0) { throw 'Installer exists but is empty.' }
+          New-Item -ItemType Directory -Force -Path installer\artifacts | Out-Null
+          $staged = Join-Path (Resolve-Path installer\artifacts) 'LycanOS-Setup-0.4.2.exe'
+          Copy-Item $installer.FullName $staged -Force
+          $check = Get-Item $staged
+          if ($check.Length -le 0) { throw 'Staged installer is empty.' }
+          Write-Host "Verified installer: $($check.FullName) ($($check.Length) bytes)"
+
       - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
           name: LycanOS-Windows-Binaries
-          path: |
-            installer\payload\*.exe
+          path: installer\payload\*.exe
+          if-no-files-found: error
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: LycanOS-Windows-Installer
-          path: Output\LycanOS-Setup-*.exe
+          path: installer\artifacts\LycanOS-Setup-0.4.2.exe
+          if-no-files-found: error
