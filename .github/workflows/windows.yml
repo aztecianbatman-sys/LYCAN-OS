@@ -23,12 +23,15 @@ jobs:
       - name: Assemble installer payload
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path installer\payload | Out-Null
+          New-Item -ItemType Directory -Force -Path installer\payload\store | Out-Null
+          New-Item -ItemType Directory -Force -Path installer\payload\docs | Out-Null
           $vm = Get-ChildItem build-windows -Filter lycan-vm.exe -Recurse | Select-Object -First 1
           if (-not $vm) { throw 'lycan-vm.exe was not produced' }
           Copy-Item $vm.FullName installer\payload\lycan-vm.exe -Force
           $cli = Get-ChildItem build-windows -Filter lycan-cli.exe -Recurse | Select-Object -First 1
           if ($cli) { Copy-Item $cli.FullName installer\payload\lycan-cli.exe -Force }
+          Copy-Item store\catalog.json installer\payload\store\catalog.json -Force
+          if (Test-Path docs) { Copy-Item docs\* installer\payload\docs -Recurse -Force }
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
@@ -41,19 +44,16 @@ jobs:
       - name: Verify and stage installer
         shell: pwsh
         run: |
-          $candidates = @()
-          $candidates += @(Get-ChildItem -Path installer -Recurse -Filter 'LycanOS-Setup-*.exe' -File -ErrorAction SilentlyContinue)
-          $candidates += @(Get-ChildItem -Path Output -Filter 'LycanOS-Setup-*.exe' -File -ErrorAction SilentlyContinue)
-          $installer = $candidates | Select-Object -First 1
-          if (-not $installer) { throw 'Inno Setup completed but no LycanOS-Setup-*.exe was found.' }
-          if ($installer.Extension -ne '.exe') { throw "Installer has unexpected extension: $($installer.Extension)" }
-          if ($installer.Length -le 0) { throw 'Installer exists but is empty.' }
+          $installer = Get-ChildItem -Path installer\Output -Filter 'LycanOS-Setup-*.exe' -File | Select-Object -First 1
+          if (-not $installer) { throw 'No installer produced.' }
+          if ($installer.Length -le 0) { throw 'Installer is empty.' }
           New-Item -ItemType Directory -Force -Path installer\artifacts | Out-Null
-          $staged = Join-Path (Resolve-Path installer\artifacts) 'LycanOS-Setup-0.4.2.exe'
+          $staged = Join-Path (Resolve-Path installer\artifacts) 'LycanOS-Setup-0.6.0.exe'
           Copy-Item $installer.FullName $staged -Force
-          $check = Get-Item $staged
-          if ($check.Length -le 0) { throw 'Staged installer is empty.' }
-          Write-Host "Verified installer: $($check.FullName) ($($check.Length) bytes)"
+          $hash = (Get-FileHash $staged -Algorithm SHA256).Hash
+          "$hash  LycanOS-Setup-0.6.0.exe" | Set-Content (Join-Path (Split-Path $staged) 'SHA256SUMS.txt')
+          Write-Host "Verified installer: $staged ($($installer.Length) bytes)"
+          Write-Host "SHA256: $hash"
 
       - name: Upload Windows executables
         uses: actions/upload-artifact@v4
@@ -66,5 +66,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: LycanOS-Windows-Installer
-          path: installer\artifacts\LycanOS-Setup-0.4.2.exe
+          path: installer\artifacts\*
           if-no-files-found: error
