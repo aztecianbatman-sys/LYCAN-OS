@@ -5,6 +5,12 @@
 #include <sstream>
 #include <string>
 #ifdef _WIN32
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
 #include <windows.h>
 #include <shellapi.h>
 
@@ -15,7 +21,8 @@ void showStore(){std::ostringstream s;s<<"LYCAN STORE — FREE SOFTWARE\r\n\r\n"
 LRESULT CALLBACK LycanWnd(HWND h,UINT m,WPARAM w,LPARAM l){
  if(m==WM_COMMAND){switch(LOWORD(w)){case 100:setText("LYCAN OS 0.6.0\r\n\r\nVirtual CPU: ONLINE\r\nVirtual memory/MMU: ONLINE\r\nLYFS storage: ONLINE\r\nKernel/services: ONLINE\r\nSecurity boundary: ONLINE\r\nPackage verification: SHA-256 ONLINE\r\nWindows host: UNTOUCHED");break;case 101:showStore();break;case 102:setText(lycan::hostDiagnostics());break;case 103:{if(g_gecko.available()){std::wstring p(g_gecko.path().begin(),g_gecko.path().end());ShellExecuteW(h,L"open",p.c_str(),nullptr,nullptr,SW_SHOWNORMAL);}else MessageBoxW(h,L"Lycan Web requires the Gecko runtime. Firefox/Gecko was not detected.\n\nThis build does not fake Gecko with Chromium.",L"Lycan Web",MB_OK|MB_ICONWARNING);}break;case 104:PostQuitMessage(0);break;}}if(m==WM_DESTROY){PostQuitMessage(0);return 0;}return DefWindowProcW(h,m,w,l);}
 }
-int WINAPI WinMain(HINSTANCE hi,HINSTANCE,int,int nCmdShow){
+
+int WINAPI wWinMain(HINSTANCE hi,HINSTANCE, PWSTR, int nCmdShow){
  lycan::Platform os; if(!os.boot())return 1;
  g_gecko.discover();
  std::ifstream cat("store/catalog.json"); std::stringstream ss;ss<<cat.rdbuf();g_storeModel.loadCatalog(ss.str());
