@@ -1,18 +1,11 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#04060b"><title>LYCAN OS</title><link rel="stylesheet" href="launcher.css"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#04060b"><title>LYCAN OS</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="launcher.css"></head>
 <body>
 <div id="scene" class="scene">
   <div class="aurora"></div><div class="gridfade"></div><div class="grain"></div>
   <header class="hud"><div class="brand-mini"><img src="assets/lycan-mark.svg" alt=""/><span>LYCAN</span><i>1.0</i></div><div class="hud-center-drag" aria-hidden="true"></div><div class="hud-right"><span id="vmState">CONNECTING</span><span class="pulse"></span><span id="clock">--:--:--</span><div class="native-actions"><button data-native-window="minimize" aria-label="Minimize">—</button><button data-native-window="maximize" aria-label="Maximize">□</button><button data-native-window="close" aria-label="Close">×</button></div></div></header>
-  <section class="core" id="core">
-    <div class="halo halo-a"></div><div class="halo halo-b"></div><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
-    <button id="logo" class="logo-core" aria-label="Open LYCAN application nodes"><img class="hero-mark" src="assets/lycan-mark.svg" alt="LYCAN"><span class="logo-word">LYCAN</span><small>VIRTUAL WORKSPACE</small></button>
-    <div class="core-caption"><span>ARES</span><b></b><span>LYFS</span><b></b><span>SECURE</span></div>
-  </section>
-  <div id="leftRail" class="node-rail left"></div><div id="rightRail" class="node-rail right"></div>
-  <main id="desktopWindows" class="windows"></main>
-  <div class="edge-hint leftHint">EDGE INTERFACE<br><span>APPLICATIONS</span></div><div class="edge-hint rightHint">EDGE INTERFACE<br><span>SYSTEM</span></div>
-  <footer class="footer"><span>LYCAN OS</span><span>WINDOWS HOST</span><span>ARES VIRTUAL CORE</span><span>CTRL+K LAUNCHER</span></footer>
-  <div id="toastStack" class="toast-stack"></div>
+  <section class="core" id="core"><div class="halo halo-a"></div><div class="halo halo-b"></div><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><button id="logo" class="logo-core" aria-label="Open LYCAN application nodes"><img class="hero-mark" src="assets/lycan-mark.svg" alt="LYCAN"><span class="logo-word">LYCAN</span><small>VIRTUAL WORKSPACE</small></button><div class="core-caption"><span>ARES</span><b></b><span>LYFS</span><b></b><span>SECURE</span></div></section>
+  <div id="leftRail" class="node-rail left"></div><div id="rightRail" class="node-rail right"></div><main id="desktopWindows" class="windows"></main>
+  <div class="edge-hint leftHint">EDGE INTERFACE<br><span>APPLICATIONS</span></div><div class="edge-hint rightHint">EDGE INTERFACE<br><span>SYSTEM</span></div><footer class="footer"><span>LYCAN OS</span><span>WINDOWS HOST</span><span>ARES VIRTUAL CORE</span><span>CTRL+K LAUNCHER</span></footer><div id="toastStack" class="toast-stack"></div>
 </div>
 <script src="renderer.js"></script><script src="windowing.js"></script><script src="launcher.js"></script><script>document.addEventListener('click',e=>{const a=e.target.closest('[data-native-window]')?.dataset.nativeWindow;if(a)window.lycan?.window(a)});</script></body></html>
