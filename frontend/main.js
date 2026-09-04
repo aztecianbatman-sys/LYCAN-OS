@@ -1,95 +1,89 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, shell, session, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const https = require('https');
-const { spawn, execFile } = require('child_process');
+const { execFile } = require('child_process');
+const { LycanVM } = require('./vm');
 
-let backend = null;
 let mainWindow = null;
-let tray = null;
 let isQuitting = false;
 const packageContexts = new Map();
-
-const PACKAGE_PERMISSIONS = new Set(['network', 'external', 'storage', 'notifications', 'clipboard-read', 'clipboard-write']);
 const CORE_IDS = new Set(['lycan-terminal','lycan-files','lycan-web','lycan-store','lycan-settings','lycan-diagnostics','lycan-snapshots','crawford']);
+const PACKAGE_PERMISSIONS = new Set(['network','external','storage','notifications','clipboard-read','clipboard-write']);
 
-function trayIcon() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#05070b"/><path fill="#fff" d="M14 42 11 18l10 8L32 12l11 14 10-8-3 24-18 10z"/><path fill="#05070b" d="m18 29 8-6-4 12-7-4zm28 0-8-6 4 12 7-4zM18 39l12-13 2 3v14l-8-3zm28 0L34 26l-2 3v14l8 3z"/><path fill="#1597ff" d="m22 31 10-4-4 7-5 2zm20 0-10-4 4 7 5 2z"/></svg>`;
-  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+function rootPath(){ return process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA,'LYCAN') : path.join(app.getPath('userData'),'guest'); }
+const vm = new LycanVM(rootPath());
+function packageRoot(){ return path.join(rootPath(),'apps'); }
+function safeId(id){ return /^[a-z0-9][a-z0-9._-]{1,63}$/.test(String(id||'')); }
+function sha256(file){ const h=crypto.createHash('sha256'); h.update(fs.readFileSync(file)); return h.digest('hex'); }
+function normalizePermissions(m){ const p=Array.isArray(m.permissions)?m.permissions.map(x=>String(x).trim().toLowerCase()):[]; if(p.some(x=>!PACKAGE_PERMISSIONS.has(x))) throw new Error('Unsupported package permission'); return [...new Set(p)]; }
+function quota(m){ const n=Number(m.storageQuotaMB ?? 16); if(!Number.isInteger(n)||n<1||n>1024) throw new Error('storageQuotaMB must be 1-1024'); return n; }
+
+function listPackages(){
+  fs.mkdirSync(packageRoot(),{recursive:true}); const result=[];
+  for(const e of fs.readdirSync(packageRoot(),{withFileTypes:true})){
+    if(!e.isDirectory()||!safeId(e.name)) continue;
+    try{ const m=JSON.parse(fs.readFileSync(path.join(packageRoot(),e.name,'manifest.json'),'utf8')); if(m.id!==e.name||m.type!=='lycan-app') continue; result.push({id:m.id,name:m.name,version:m.version,description:m.description||'LYCAN guest application.',entry:m.entry||'app/index.html',icon:m.icon||'',permissions:normalizePermissions(m),storageQuotaMB:quota(m),type:CORE_IDS.has(m.id)?'CORE':'LOCAL'}); }catch{}
+  }
+  return result.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+}
+function registerPackage(m){ normalizePermissions(m); quota(m); const out=vm.cmd(`app register ${m.id} ${m.version} ${quota(m)} ${normalizePermissions(m).join(',')}`); if(!out.startsWith('APP REGISTERED')) throw new Error(out); }
+function packageEntry(id){
+  if(!safeId(id)) throw new Error('Invalid package id'); const dir=path.resolve(packageRoot(),id); const root=path.resolve(packageRoot()); if(!dir.startsWith(root+path.sep)) throw new Error('Invalid package path');
+  const manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.json'),'utf8')); const entry=String(manifest.entry||'app/index.html').replace(/\\/g,'/'); if(entry.startsWith('/')||entry.includes('../')) throw new Error('Invalid package entry');
+  const file=path.resolve(dir,entry); if(!file.startsWith(dir+path.sep)||!fs.existsSync(file)) throw new Error('Package entrypoint not found'); return {dir,file,manifest,permissions:normalizePermissions(manifest)};
 }
 
-function startBackend() {
-  const exe = app.isPackaged ? path.join(process.resourcesPath, 'lycan-backend.exe') : path.join(__dirname, '..', 'build', 'Release', 'lycan-backend.exe');
-  backend = spawn(exe, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: false });
-  backend.stderr.on('data', b => console.error(String(b)));
-  backend.on('exit', (code, signal) => { console.log(`LYCAN backend stopped (${code ?? 'null'}/${signal ?? 'none'})`); backend = null; });
-  backend.on('error', err => console.error('LYCAN backend error:', err.message));
+function createWindow(){
+  mainWindow = new BrowserWindow({width:1440,height:920,minWidth:1080,minHeight:700,show:false,frame:false,backgroundColor:'#030508',title:'LYCAN OS',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:false}});
+  mainWindow.setMenuBarVisibility(false); mainWindow.loadFile(path.join(__dirname,'index.html'));
+  mainWindow.once('ready-to-show',()=>mainWindow.show());
+  mainWindow.on('close',event=>{ if(!isQuitting){ event.preventDefault(); mainWindow.hide(); } });
 }
-function commandVm(command) {
-  return new Promise((resolve, reject) => {
-    if (!backend || backend.killed || backend.exitCode !== null) return reject(new Error('LYCAN backend is offline'));
-    let buffer = ''; let settled = false;
-    const finish = (fn, value) => { if (settled) return; settled = true; backend?.stdout?.off('data', onData); clearTimeout(timer); fn(value); };
-    const onData = chunk => { buffer += String(chunk); const marker = buffer.indexOf('\n<<<LYCAN_END>>>'); if (marker >= 0) finish(resolve, buffer.slice(0, marker)); };
-    const timer = setTimeout(() => finish(reject, new Error('LYCAN backend command timeout')), 10000);
-    backend.stdout.on('data', onData);
-    try { backend.stdin.write(String(command).replace(/\r?\n/g, ' ') + '\n'); } catch (err) { finish(reject, err); }
+
+function openGecko(url='about:blank'){
+  const candidates=[]; if(process.env.LYCAN_GECKO_PATH)candidates.push(process.env.LYCAN_GECKO_PATH); if(process.env.PROGRAMFILES)candidates.push(path.join(process.env.PROGRAMFILES,'Mozilla Firefox','firefox.exe')); if(process.env['PROGRAMFILES(X86)'])candidates.push(path.join(process.env['PROGRAMFILES(X86)'],'Mozilla Firefox','firefox.exe')); if(process.env.LOCALAPPDATA)candidates.push(path.join(process.env.LOCALAPPDATA,'Mozilla Firefox','firefox.exe'));
+  const exe=candidates.find(p=>fs.existsSync(p)); if(!exe)return{ok:false,error:'Firefox/Gecko was not found. Install Firefox or set LYCAN_GECKO_PATH.'};
+  if(!/^NETWORK ONLINE/m.test(vm.cmd('network status')))return{ok:false,error:'LYCAN guest network is offline.'};
+  const profile=path.join(rootPath(),'gecko-profile'); fs.mkdirSync(profile,{recursive:true}); const child=execFile(exe,['-profile',profile,'-new-instance','-private-window',String(url||'about:blank')],{windowsHide:false}); child.unref(); return{ok:true,engine:'Gecko',profile};
+}
+
+function installPackage(filePath){
+  return new Promise((resolve,reject)=>{
+    const source=path.resolve(String(filePath||'')); if(!source.toLowerCase().endsWith('.lypkg'))return reject(new Error('Select a .lypkg file')); if(!fs.existsSync(source))return reject(new Error('Package file not found'));
+    const staging=path.join(app.getPath('temp'),`lycan-${crypto.randomBytes(8).toString('hex')}`); fs.mkdirSync(staging,{recursive:true});
+    const ps=`Expand-Archive -LiteralPath ${JSON.stringify(source)} -DestinationPath ${JSON.stringify(staging)} -Force`;
+    execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',ps],{windowsHide:true,timeout:30000},(err)=>{
+      if(err){fs.rmSync(staging,{recursive:true,force:true});return reject(err);}
+      try{
+        const manifest=JSON.parse(fs.readFileSync(path.join(staging,'manifest.json'),'utf8')); if(manifest.type!=='lycan-app'||!safeId(manifest.id)||CORE_IDS.has(manifest.id))throw new Error('Invalid or reserved LYPKG'); normalizePermissions(manifest); quota(manifest);
+        const checks=fs.readFileSync(path.join(staging,'checksums.sha256'),'utf8').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+        for(const line of checks){const m=line.match(/^([a-f0-9]{64})\s+(.+)$/i);if(!m)throw new Error('Invalid checksums.sha256');const rel=m[2].replace(/^\*/,'').replace(/\\/g,'/');if(rel.includes('..'))throw new Error('Unsafe package path');const f=path.resolve(staging,rel);if(!f.startsWith(path.resolve(staging)+path.sep)||!fs.existsSync(f)||sha256(f).toLowerCase()!==m[1].toLowerCase())throw new Error(`Checksum failed: ${rel}`);}
+        const dest=path.join(packageRoot(),manifest.id); fs.rmSync(dest,{recursive:true,force:true}); fs.mkdirSync(dest,{recursive:true}); fs.cpSync(path.join(staging,'app'),path.join(dest,'app'),{recursive:true}); fs.copyFileSync(path.join(staging,'manifest.json'),path.join(dest,'manifest.json')); fs.copyFileSync(path.join(staging,'checksums.sha256'),path.join(dest,'checksums.sha256')); registerPackage(manifest); resolve({ok:true,id:manifest.id,name:manifest.name,version:manifest.version});
+      }catch(e){reject(e);}finally{fs.rmSync(staging,{recursive:true,force:true});}
+    });
   });
 }
-function showMainWindow(){if(!mainWindow)return;mainWindow.show();mainWindow.focus();}
-function hideMainWindow(){if(!mainWindow)return;mainWindow.hide();}
-function createTray(){tray=new Tray(trayIcon());tray.setToolTip('LYCAN OS — Guest environment running');const update=()=>{const visible=!!mainWindow?.isVisible();tray.setContextMenu(Menu.buildFromTemplate([{label:visible?'LYCAN OS — OPEN':'LYCAN OS — RUNNING IN BACKGROUND',enabled:false},{type:'separator'},{label:visible?'Hide LYCAN OS':'Open LYCAN OS',click:()=>visible?hideMainWindow():showMainWindow()},{label:'Restart guest runtime',click:async()=>{try{await commandVm('ping');}catch{}}},{type:'separator'},{label:'Quit LYCAN OS',click:()=>{isQuitting=true;app.quit();}}]));};tray.on('click',()=>{if(!mainWindow)return;mainWindow.isVisible()?hideMainWindow():showMainWindow();update();});tray.on('double-click',()=>{showMainWindow();update();});update();return update;}
-
-function candidateFirefoxPaths(){const list=[];if(process.env.LYCAN_GECKO_PATH)list.push(process.env.LYCAN_GECKO_PATH);if(app.isPackaged)list.push(path.join(process.resourcesPath,'gecko','firefox.exe'));if(process.env.PROGRAMFILES)list.push(path.join(process.env.PROGRAMFILES,'Mozilla Firefox','firefox.exe'));if(process.env['PROGRAMFILES(X86)'])list.push(path.join(process.env['PROGRAMFILES(X86)'],'Mozilla Firefox','firefox.exe'));if(process.env.LOCALAPPDATA)list.push(path.join(process.env.LOCALAPPDATA,'Mozilla Firefox','firefox.exe'));return [...new Set(list)];}
-function findFirefox(){return candidateFirefoxPaths().find(p=>fs.existsSync(p))||null;}
-async function openGecko(url='about:blank'){
-  const firefox=findFirefox(); if(!firefox)return{ok:false,error:'GECKO NOT FOUND. Install Mozilla Firefox or place firefox.exe in resources/gecko/.'};
-  const network=await commandVm('network status'); if(!/^NETWORK ONLINE\b/m.test(network))return{ok:false,error:'LYCAN GUEST NETWORK IS OFFLINE.'};
-  const root=process.env.LOCALAPPDATA?path.join(process.env.LOCALAPPDATA,'LYCAN','gecko-profile'):path.join(app.getPath('userData'),'gecko-profile');fs.mkdirSync(root,{recursive:true});
-  const cleanUrl=String(url||'about:blank').trim();const child=spawn(firefox,['-profile',root,'-new-instance','-private-window',cleanUrl],{windowsHide:false,detached:true,stdio:'ignore'});child.unref();return{ok:true,engine:'Gecko',executable:firefox,profile:root};
+function downloadPackage(url){
+  return new Promise((resolve,reject)=>{const u=new URL(url);if(u.protocol!=='https:')return reject(new Error('Only HTTPS repository URLs are allowed'));https.get(u,res=>{if(res.statusCode>=300&&res.statusCode<400&&res.headers.location){res.resume();return downloadPackage(new URL(res.headers.location,u).toString()).then(resolve,reject);}if(res.statusCode!==200){res.resume();return reject(new Error(`HTTP ${res.statusCode}`));}const chunks=[];let size=0;res.on('data',b=>{size+=b.length;if(size>50*1024*1024)res.destroy(new Error('Package exceeds 50 MB'));else chunks.push(b);});res.on('end',async()=>{try{const f=path.join(app.getPath('temp'),`lycan-${Date.now()}.lypkg`);fs.writeFileSync(f,Buffer.concat(chunks));const r=await installPackage(f);fs.rmSync(f,{force:true});resolve(r);}catch(e){reject(e);}});res.on('error',reject);}).on('error',reject);});
+}
+function launchPackage(id){
+  const p=packageEntry(id), partition=`persist:lycan-${id}`, ses=session.fromPartition(partition), network=p.permissions.includes('network');
+  ses.webRequest.onBeforeRequest({urls:['*://*/*']},(details,cb)=>{let protocol='';try{protocol=new URL(details.url).protocol;}catch{}cb({cancel:(protocol==='http:'||protocol==='https:')&&!network});});
+  const win=new BrowserWindow({width:1120,height:760,minWidth:720,minHeight:480,backgroundColor:'#05070a',title:`LYCAN — ${p.manifest.name}`,webPreferences:{preload:path.join(__dirname,'package-preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,partition,devTools:!app.isPackaged}});
+  packageContexts.set(win.webContents.id,{id,dir:p.dir,permissions:p.permissions,window:win}); vm.cmd(`open ${id}`);
+  win.webContents.setWindowOpenHandler(({url})=>{if(p.permissions.includes('external')){shell.openExternal(url);return{action:'deny'};}return{action:network?'allow':'deny'};});
+  win.on('closed',()=>{packageContexts.delete(win.webContents.id);try{vm.cmd(`close ${id}`);}catch{}}); win.loadFile(p.file); return{ok:true,id,name:p.manifest.name,version:p.manifest.version,permissions:p.permissions};
 }
 
-function sha256(file){const h=crypto.createHash('sha256');h.update(fs.readFileSync(file));return h.digest('hex');}
-function safePackageId(id){return/^[a-z0-9][a-z0-9._-]{1,63}$/.test(id);}
-function packagesRootPath(){return process.env.LOCALAPPDATA?path.join(process.env.LOCALAPPDATA,'LYCAN','apps'):path.join(app.getPath('userData'),'apps');}
-function packageContextFromSender(sender){const ctx=packageContexts.get(sender.id);if(!ctx)throw new Error('LYCAN package context unavailable');return ctx;}
-function normalizePermissions(manifest){const raw=Array.isArray(manifest.permissions)?manifest.permissions:[];if(raw.some(p=>!PACKAGE_PERMISSIONS.has(String(p).trim().toLowerCase())))throw new Error('Manifest contains an unsupported permission');return [...new Set(raw.map(p=>String(p).trim().toLowerCase()))];}
-function storageQuotaMB(manifest){const n=Number(manifest.storageQuotaMB??16);if(!Number.isInteger(n)||n<1||n>1024)throw new Error('storageQuotaMB must be 1-1024');return n;}
-function listPackages(){const root=packagesRootPath();fs.mkdirSync(root,{recursive:true});const result=[];for(const entry of fs.readdirSync(root,{withFileTypes:true})){if(!entry.isDirectory()||!safePackageId(entry.name))continue;const dir=path.join(root,entry.name),manifestPath=path.join(dir,'manifest.json');try{const manifest=JSON.parse(fs.readFileSync(manifestPath,'utf8'));if(manifest.id!==entry.name||manifest.type!=='lycan-app'||!manifest.name||!manifest.version)continue;result.push({id:manifest.id,name:String(manifest.name),version:String(manifest.version),type:CORE_IDS.has(manifest.id)?'CORE':'LOCAL',description:String(manifest.description||'Registered LYCAN guest application.'),entry:String(manifest.entry||'app/index.html'),icon:String(manifest.icon||''),permissions:normalizePermissions(manifest),storageQuotaMB:storageQuotaMB(manifest)});}catch{}}return result.sort((a,b)=>a.name.localeCompare(b.name));}
-function packageEntryPath(id){if(!safePackageId(id))throw new Error('Invalid package id');const root=path.resolve(packagesRootPath()),dir=path.resolve(root,id);if(!dir.startsWith(root+path.sep))throw new Error('Package path escaped registry');const manifestPath=path.join(dir,'manifest.json');if(!fs.existsSync(manifestPath))throw new Error('Package not installed');const manifest=JSON.parse(fs.readFileSync(manifestPath,'utf8'));if(manifest.id!==id||manifest.type!=='lycan-app')throw new Error('Invalid package manifest');const permissions=normalizePermissions(manifest),entry=String(manifest.entry||'app/index.html').replace(/\\/g,'/');if(!entry||entry.startsWith('/')||entry.includes('../')||entry.includes('/..'))throw new Error('Invalid package entry');const file=path.resolve(dir,entry);if(!file.startsWith(dir+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile())throw new Error('Package entrypoint not found');return{file,manifest,permissions,dir};}
-async function registerManifest(manifest){const perms=normalizePermissions(manifest),quota=storageQuotaMB(manifest);const result=await commandVm(`app register ${manifest.id} ${manifest.version} ${quota} ${perms.join(',')}`);if(!/^APP REGISTERED\s/.test(result))throw new Error(result);return result;}
-function launchPackage(id){const{file,manifest,permissions,dir}=packageEntryPath(id);const partition=`persist:lycan-${id}`,ses=session.fromPartition(partition),allowedNetwork=permissions.includes('network');ses.webRequest.onBeforeRequest({urls:['*://*/*']},(details,callback)=>{let protocol='';try{protocol=new URL(details.url).protocol;}catch{}callback({cancel:(protocol==='http:'||protocol==='https:')&&!allowedNetwork});});const child=new BrowserWindow({width:1100,height:720,minWidth:640,minHeight:420,backgroundColor:'#05070a',title:`LYCAN — ${manifest.name}`,webPreferences:{preload:path.join(__dirname,'package-preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:!app.isPackaged,partition,additionalArguments:[`--lycan-app-id=${id}`]}});child.setMenuBarVisibility(false);const ctx={id,permissions,dir,window:child};packageContexts.set(child.webContents.id,ctx);commandVm(`open ${id}`).catch(()=>{});child.webContents.on('will-navigate',event=>{if(/^https?:/i.test(event.url)&&!allowedNetwork)event.preventDefault();});child.webContents.setWindowOpenHandler(({url})=>{if(!/^https?:/i.test(url))return{action:'deny'};if(permissions.includes('external')){shell.openExternal(url);return{action:'deny'};}return{action:allowedNetwork?'allow':'deny'};});child.on('minimize',()=>commandVm(`suspend ${id}`).catch(()=>{}));child.on('restore',()=>commandVm(`resume ${id}`).catch(()=>{}));child.webContents.on('render-process-gone',(_event,details)=>{commandVm(`crash ${id} ${String(details.reason||'render-process-gone').replace(/[^a-zA-Z0-9._-]/g,'_')}`).catch(()=>{});});child.on('closed',()=>{packageContexts.delete(child.webContents.id);commandVm(`close ${id}`).catch(()=>{});});child.loadFile(file);return{ok:true,id,name:manifest.name,version:manifest.version,permissions};}
-async function installLypkg(filePath){const source=path.resolve(String(filePath||''));if(!source.toLowerCase().endsWith('.lypkg'))throw new Error('Not a .lypkg package');if(!fs.existsSync(source))throw new Error('Package file not found');const staging=path.join(app.getPath('temp'),`lycan-lypkg-${crypto.randomBytes(8).toString('hex')}`),packagesRoot=packagesRootPath();fs.mkdirSync(staging,{recursive:true});fs.mkdirSync(packagesRoot,{recursive:true});try{await new Promise((resolve,reject)=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',`Expand-Archive -LiteralPath ${JSON.stringify(source)} -DestinationPath ${JSON.stringify(staging)} -Force`],{windowsHide:true,timeout:30000},(err,stdout,stderr)=>err?reject(new Error(String(stderr||err.message))):resolve()));const manifestPath=path.join(staging,'manifest.json'),checksumsPath=path.join(staging,'checksums.sha256'),manifest=JSON.parse(fs.readFileSync(manifestPath,'utf8'));if(!manifest.id||!safePackageId(manifest.id))throw new Error('Invalid manifest id');if(CORE_IDS.has(manifest.id))throw new Error('Core package IDs are reserved');if(!manifest.name||!manifest.version||manifest.type!=='lycan-app')throw new Error('Invalid LYPKG manifest');normalizePermissions(manifest);storageQuotaMB(manifest);if(!fs.existsSync(path.join(staging,'app')))throw new Error('Package is missing app/');if(!fs.existsSync(checksumsPath))throw new Error('Package is missing checksums.sha256');const lines=fs.readFileSync(checksumsPath,'utf8').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);for(const line of lines){const m=line.match(/^([a-f0-9]{64})\s+(.+)$/i);if(!m)throw new Error(`Invalid checksum line: ${line}`);const rel=m[2].replace(/^\*?/,'').replace(/\\/g,'/');if(rel.startsWith('../')||rel.includes('/../'))throw new Error('Invalid checksum path');const file=path.resolve(staging,rel);if(!file.startsWith(path.resolve(staging)+path.sep))throw new Error('Checksum path escaped staging');if(!fs.existsSync(file)||!fs.statSync(file).isFile())throw new Error(`Missing package file: ${rel}`);if(sha256(file).toLowerCase()!==m[1].toLowerCase())throw new Error(`SHA-256 mismatch: ${rel}`);}const destination=path.join(packagesRoot,manifest.id);if(!path.resolve(destination).startsWith(path.resolve(packagesRoot)+path.sep))throw new Error('Invalid destination');fs.rmSync(destination,{recursive:true,force:true});fs.mkdirSync(destination,{recursive:true});fs.cpSync(path.join(staging,'app'),path.join(destination,'app'),{recursive:true});fs.copyFileSync(manifestPath,path.join(destination,'manifest.json'));fs.copyFileSync(checksumsPath,path.join(destination,'checksums.sha256'));try{await registerManifest(manifest);}catch(error){fs.rmSync(destination,{recursive:true,force:true});throw error;}return{ok:true,id:manifest.id,name:manifest.name,version:manifest.version,destination,permissions:normalizePermissions(manifest),storageQuotaMB:storageQuotaMB(manifest)};}finally{fs.rmSync(staging,{recursive:true,force:true});}}
-function requestHttps(url,maxBytes=50*1024*1024){return new Promise((resolve,reject)=>{const target=new URL(url);if(target.protocol!=='https:')return reject(new Error('Only HTTPS repository URLs are allowed'));const req=https.get(target,res=>{if(res.statusCode>=300&&res.statusCode<400&&res.headers.location){res.resume();return requestHttps(new URL(res.headers.location,target).toString(),maxBytes).then(resolve,reject);}if(res.statusCode!==200){res.resume();return reject(new Error(`Repository download failed: HTTP ${res.statusCode}`));}const chunks=[];let size=0;res.on('data',chunk=>{size+=chunk.length;if(size>maxBytes){req.destroy(new Error('Repository package exceeds size limit'));return;}chunks.push(chunk);});res.on('end',()=>resolve(Buffer.concat(chunks)));res.on('error',reject);});req.setTimeout(30000,()=>req.destroy(new Error('Repository download timeout')));req.on('error',reject);});}
-async function downloadAndInstall(url){const buffer=await requestHttps(String(url||''));const file=path.join(app.getPath('temp'),`lycan-store-${crypto.randomBytes(8).toString('hex')}.lypkg`);fs.writeFileSync(file,buffer);try{return await installLypkg(file);}finally{fs.rmSync(file,{force:true});}}
-async function uninstallPackage(id){if(!safePackageId(id))throw new Error('Invalid package id');if(CORE_IDS.has(id))throw new Error('Core packages cannot be uninstalled');for(const[webId,ctx]of packageContexts){if(ctx.id===id){try{ctx.window.close();}catch{}packageContexts.delete(webId);}}await commandVm(`close ${id}`).catch(()=>{});const root=path.resolve(packagesRootPath()),dir=path.resolve(root,id);if(!dir.startsWith(root+path.sep))throw new Error('Invalid package path');if(!fs.existsSync(dir))throw new Error('Package not installed');const result=await commandVm(`app unregister ${id}`);if(!/^APP UNREGISTERED/.test(result))throw new Error(result);fs.rmSync(dir,{recursive:true,force:true});return{ok:true,id};}
-async function packageStorageCommand(event,op,bucket,pathValue,text){const ctx=packageContextFromSender(event.sender);if(!ctx.permissions.includes('storage'))throw new Error('STORAGE PERMISSION DENIED');const id=ctx.id,b=String(bucket||'data'),p=String(pathValue||'');let command='';if(op==='list')command=`storage ${id} ${b} ${p}`;if(op==='read')command=`storage-read ${id} ${b} ${p}`;if(op==='write')command=`storage-write ${id} ${b} ${p} ${String(text||'')}`;if(op==='delete')command=`storage-delete ${id} ${b} ${p}`;if(!command)throw new Error('Unknown storage operation');return commandVm(command);}
+app.whenReady().then(()=>{vm.boot();createWindow();app.on('activate',()=>mainWindow?.show());});
+app.on('before-quit',()=>{isQuitting=true;});
 
-function createWindow(updateTrayState){mainWindow=new BrowserWindow({width:1500,height:900,minWidth:1000,minHeight:650,frame:false,backgroundColor:'#04060b',show:false,title:'LYCAN OS',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,devTools:!app.isPackaged}});mainWindow.setMenuBarVisibility(false);mainWindow.loadFile(path.join(__dirname,'index.html'));mainWindow.once('ready-to-show',()=>{showMainWindow();updateTrayState?.();});mainWindow.on('show',()=>updateTrayState?.());mainWindow.on('hide',()=>updateTrayState?.());mainWindow.on('minimize',event=>{event.preventDefault();hideMainWindow();});mainWindow.on('close',event=>{if(!isQuitting){event.preventDefault();hideMainWindow();updateTrayState?.();}});mainWindow.on('closed',()=>{mainWindow=null;updateTrayState?.();});}
-
-app.whenReady().then(()=>{startBackend();const updateTrayState=createTray();createWindow(updateTrayState);
-  ipcMain.handle('lycan:command',(_event,command)=>commandVm(String(command||'')));
-  ipcMain.handle('lycan:gecko',async(_event,url)=>openGecko(url));
-  ipcMain.handle('lycan:list-packages',()=>listPackages());
-  ipcMain.handle('lycan:launch-package',(_event,id)=>{try{return launchPackage(String(id||''));}catch(error){return{ok:false,error:error.message};}});
-  ipcMain.handle('lycan:download-package',async(_event,url)=>{try{return await downloadAndInstall(String(url||''));}catch(error){return{ok:false,error:error.message};}});
-  ipcMain.handle('lycan:uninstall-package',async(_event,id)=>{try{return await uninstallPackage(String(id||''));}catch(error){return{ok:false,error:error.message};}});
-  ipcMain.on('lycan:package-id',event=>{try{event.returnValue=packageContextFromSender(event.sender).id;}catch{event.returnValue=null;}});
-  ipcMain.on('lycan:package-permissions',event=>{try{event.returnValue=packageContextFromSender(event.sender).permissions;}catch{event.returnValue=[];}});
-  ipcMain.handle('lycan:package-external',async(event,url)=>{try{const p=packageContextFromSender(event.sender),clean=String(url||'').trim();if(!p.permissions.includes('external'))throw new Error('EXTERNAL PERMISSION DENIED');if(!/^https?:/i.test(clean))throw new Error('Only http(s) URLs are allowed');await shell.openExternal(clean);return{ok:true};}catch(error){return{ok:false,error:error.message};}});
-  ipcMain.handle('lycan:app-storage-list',(event,bucket,pathValue)=>packageStorageCommand(event,'list',bucket,pathValue));
-  ipcMain.handle('lycan:app-storage-read',(event,bucket,pathValue)=>packageStorageCommand(event,'read',bucket,pathValue));
-  ipcMain.handle('lycan:app-storage-write',(event,bucket,pathValue,text)=>packageStorageCommand(event,'write',bucket,pathValue,text));
-  ipcMain.handle('lycan:app-storage-delete',(event,bucket,pathValue)=>packageStorageCommand(event,'delete',bucket,pathValue));
-  ipcMain.handle('lycan:app-storage-usage',event=>{const p=packageContextFromSender(event.sender);if(!p.permissions.includes('storage'))throw new Error('STORAGE PERMISSION DENIED');return commandVm(`storage-usage ${p.id}`);});
-  ipcMain.handle('lycan:app-storage-quota',event=>{const p=packageContextFromSender(event.sender);if(!p.permissions.includes('storage'))throw new Error('STORAGE PERMISSION DENIED');return commandVm(`storage-quota ${p.id}`);});
-  ipcMain.handle('lycan:app-network-status',event=>{const p=packageContextFromSender(event.sender);if(!p.permissions.includes('network'))throw new Error('NETWORK PERMISSION DENIED');return commandVm('network status');});
-  ipcMain.handle('lycan:app-runtime',(event,operation)=>{const p=packageContextFromSender(event.sender);if(!p.permissions.includes('storage'))throw new Error('STORAGE PERMISSION DENIED');const allowed=new Set(['memory','ps','apps','diagnostics']);if(!allowed.has(String(operation)))throw new Error('RUNTIME OPERATION DENIED');return commandVm(String(operation));});
-  ipcMain.handle('lycan:package-notify',(event,title,body)=>{try{const p=packageContextFromSender(event.sender);if(!p.permissions.includes('notifications'))throw new Error('NOTIFICATIONS PERMISSION DENIED');if(Notification.isSupported())new Notification({title:`LYCAN — ${p.id}`,body:String(body||'')}).show();return{ok:true};}catch(error){return{ok:false,error:error.message};}});
-  ipcMain.handle('lycan:install-lypkg',async()=>{const picked=await dialog.showOpenDialog(mainWindow,{title:'Install LYPKG',properties:['openFile'],filters:[{name:'LYCAN Packages',extensions:['lypkg']}]});if(picked.canceled||!picked.filePaths[0])return{ok:false,canceled:true};return installLypkg(picked.filePaths[0]).catch(error=>({ok:false,error:error.message}));});
-  ipcMain.on('lycan:window',(_event,action)=>{if(!mainWindow)return;if(action==='minimize'||action==='close')hideMainWindow();if(action==='maximize')mainWindow.isMaximized()?mainWindow.unmaximize():mainWindow.maximize();updateTrayState();});
-  app.on('activate',()=>showMainWindow());
-});
-app.on('window-all-closed',event=>event.preventDefault());
-app.on('before-quit',()=>{isQuitting=true;for(const ctx of packageContexts.values()){try{ctx.window.close();}catch{}}if(backend&&!backend.killed){try{backend.stdin.write('__LYCAN_EXIT__\n');}catch{}setTimeout(()=>{if(backend&&!backend.killed)backend.kill();},1200);}});
+ipcMain.handle('lycan:command',(_e,c)=>{try{return vm.cmd(String(c||''));}catch(e){throw new Error(e.message||String(e));}});
+ipcMain.handle('lycan:open-gecko',(_e,url)=>openGecko(url));
+ipcMain.handle('lycan:list-packages',()=>listPackages());
+ipcMain.handle('lycan:install-package',async()=>{const r=await dialog.showOpenDialog({properties:['openFile'],filters:[{name:'LYCAN Package',extensions:['lypkg']}]});if(r.canceled||!r.filePaths[0])return{canceled:true};try{return await installPackage(r.filePaths[0]);}catch(e){return{ok:false,error:e.message};}});
+ipcMain.handle('lycan:download-package',async(_e,url)=>{try{return await downloadPackage(url);}catch(e){return{ok:false,error:e.message};}});
+ipcMain.handle('lycan:launch-package',(_e,id)=>{try{return launchPackage(String(id||''));}catch(e){return{ok:false,error:e.message};}});
+ipcMain.on('lycan:window',(_e,action)=>{if(action==='minimize')mainWindow?.minimize();if(action==='maximize'){if(mainWindow?.isMaximized())mainWindow.unmaximize();else mainWindow?.maximize();}if(action==='close')mainWindow?.hide();if(action==='show')mainWindow?.show();if(action==='quit'){isQuitting=true;app.quit();}});
