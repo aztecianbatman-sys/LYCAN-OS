@@ -4,6 +4,8 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   release:
     runs-on: windows-latest
@@ -27,9 +29,30 @@ jobs:
         run: npm run build:win
       - name: Verify setup exists
         shell: powershell
-        run: if (!(Test-Path 'frontend\dist\LYCAN-OS-1.0.0-Setup-x64.exe')) { throw 'LYCAN setup installer was not produced' }
+        run: |
+          $setup = Get-ChildItem 'frontend\dist\LYCAN-OS-*-Setup-x64.exe' | Select-Object -First 1
+          if (!$setup) { throw 'LYCAN setup installer was not produced' }
+      - name: Build official Store packages
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path release-packages | Out-Null
+          .\tools\make-lypkg.ps1 -AppDirectory .\store\packages\lycan-notes -Output .\release-packages\lycan-notes-1.0.0.lypkg
+          .\tools\make-lypkg.ps1 -AppDirectory .\store\packages\lycan-monitor -Output .\release-packages\lycan-monitor-1.0.0.lypkg
       - name: Upload setup installer
         uses: actions/upload-artifact@v4
         with:
-          name: LYCAN-OS-1.0.0-Windows-x64
-          path: frontend/dist/LYCAN-OS-1.0.0-Setup-x64.exe
+          name: LYCAN-OS-Windows-x64
+          path: frontend/dist/LYCAN-OS-*-Setup-x64.exe
+      - name: Upload Store packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: LYCAN-Store-LYPKG
+          path: release-packages/*.lypkg
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            frontend/dist/LYCAN-OS-*-Setup-x64.exe
+            release-packages/*.lypkg
