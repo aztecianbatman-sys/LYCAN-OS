@@ -4,6 +4,7 @@ const path = require('path');
 const root = __dirname;
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const fail = message => { throw new Error(`LYCAN packaging smoke test failed: ${message}`); };
+const compact = value => String(value).replace(/\s+/g, '');
 
 const pkg = JSON.parse(read('package.json'));
 if (pkg.main !== 'bootstrap.js') fail(`package main is ${pkg.main}, expected bootstrap.js`);
@@ -16,15 +17,15 @@ for (const file of ['bootstrap.js','main.js','preload.js','package-preload.js','
   if (!fs.existsSync(path.join(root, file))) fail(`missing packaged frontend file: ${file}`);
 }
 
-const bootstrap = read('bootstrap.js');
-if (!bootstrap.includes("path.join(__dirname, 'index.html')")) fail('bootstrap does not validate index.html');
+const bootstrap = compact(read('bootstrap.js'));
+if (!bootstrap.includes("path.join(__dirname,'index.html')")) fail('bootstrap does not validate index.html');
 if (!bootstrap.includes("require('./main.js')")) fail('bootstrap does not delegate to main.js');
 
-const main = read('main.js');
-if (!main.includes("mainWindow.loadFile(path.join(__dirname, 'index.html'))")) fail('main window does not load index.html');
-if (main.includes("loadFile(path.join(__dirname, 'assets/lycan-mark.svg'))")) fail('main window is configured to load the logo asset');
+const main = compact(read('main.js'));
+if (!/mainWindow\.loadFile\(path\.join\(__dirname,'index\.html'\)\)/.test(main)) fail('main window does not load index.html');
+if (/loadFile\([^)]*assets[\\/]lycan-mark\.svg/.test(main)) fail('main window is configured to load the logo asset');
 
-const installer = fs.readFileSync(path.join(root, '..', 'installer', 'lycan.nsh'), 'utf8');
+const installer = read(path.join('..', 'installer', 'lycan.nsh'));
 if (!installer.includes('$INSTDIR\\LYCAN.exe')) fail('NSIS script does not target LYCAN.exe');
 if (installer.includes('$INSTDIR\\assets\\lycan-mark.svg')) fail('NSIS script targets the logo asset');
 
