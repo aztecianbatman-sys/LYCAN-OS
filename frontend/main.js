@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserWindow: BW, ipcMain, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 let backend = null;
@@ -93,4 +93,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', event => event.preventDefault());
-app.on('before-quit', () => { isQuitting = true; if (backend && !backend.killed) backend.stdin.write('__LYCAN_EXIT__\n'); });
+app.on('before-quit', () => {
+  isQuitting = true;
+  if (backend && !backend.killed) backend.stdin.write('__LYCAN_EXIT__\n');
+});
