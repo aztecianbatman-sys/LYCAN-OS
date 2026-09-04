@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "type": "lycan-app",
+  "id": "lycan-monitor",
+  "name": "LYCAN Monitor",
+  "version": "1.0.0",
+  "description": "A guest telemetry surface for memory, packages, processes and network state.",
+  "entry": "app/index.html",
+  "icon": "app/assets/icon.svg",
+  "permissions": ["storage"],
+  "storageQuotaMB": 16
+}
