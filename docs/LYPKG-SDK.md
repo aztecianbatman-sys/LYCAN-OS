@@ -26,25 +26,39 @@ my-app/
   "description": "Example LYCAN application.",
   "entry": "app/index.html",
   "icon": "app/assets/icon.svg",
-  "permissions": ["storage"]
+  "permissions": ["storage", "network", "notifications"],
+  "storageQuotaMB": 32
 }
 ```
 
-`entry` and `icon` must remain inside `app/`. When `entry` is omitted, the runtime uses `app/index.html`.
+`entry` and `icon` must remain inside `app/`. When `entry` is omitted, the runtime uses `app/index.html`. `storageQuotaMB` is the application's guest-local quota and must be between 1 and 1024 MB.
 
-## Runtime permissions
+## Permissions
 
-Permissions are enforced by the LYCAN package runtime. Declaring a permission is not the same as receiving Windows access.
+Supported permission labels are `storage`, `network`, `external`, `notifications`, `clipboard-read`, and `clipboard-write`.
 
-- `storage` — creates a private application data directory below the LYCAN package registry.
-- `network` — permits HTTP/HTTPS requests from the package's isolated session.
-- `external` — permits an app to request opening an HTTP/HTTPS URL in the user's external browser.
-- `clipboard-read` — reserved for the controlled clipboard API.
-- `clipboard-write` — reserved for the controlled clipboard API.
+A permission never grants Windows access. LYCAN apps run with Chromium sandboxing, context isolation, no Node integration, and a package-specific persistent session.
 
-Packages without `network` cannot make HTTP/HTTPS requests through their isolated Electron session. Packages without `external` cannot launch external browser URLs through the package bridge.
+## Storage API
 
-Every package runs with `contextIsolation`, `nodeIntegration: false`, Chromium sandboxing, and a dedicated persistent session partition. Package applications cannot directly access the Windows filesystem, host processes, boot configuration, or partition layout.
+The package preload exposes a scoped `window.lycanApp.storage` API. All paths are relative to the application's guest storage and may use the `data`, `config`, or `cache` bucket.
+
+```js
+await lycanApp.storage.write('data', 'notes.txt', 'hello');
+const text = await lycanApp.storage.read('data', 'notes.txt');
+const entries = await lycanApp.storage.list('data', '');
+await lycanApp.storage.delete('cache', 'old.tmp');
+await lycanApp.storage.usage();
+await lycanApp.storage.quota();
+```
+
+Storage is persisted under the LYCAN guest data root and survives application and operating-system restarts. Quota is enforced by the ARES runtime before a write is committed.
+
+## Runtime APIs
+
+`lycanApp.network.status()` reads the guest VNET state when `network` permission is present. `lycanApp.requestExternal(url)` requires `external`. `lycanApp.notify(title, body)` requires `notifications`.
+
+The lifecycle is managed by ARES: install/register, launch, suspend, resume, crash/error state, close, and uninstall. The Store uses the same registry and version information.
 
 ## Create a project
 
@@ -52,20 +66,16 @@ Every package runs with `contextIsolation`, `nodeIntegration: false`, Chromium s
 .\tools\new-lypkg.ps1 -Id my-app -Name "My App"
 ```
 
-This creates a ready-to-edit application skeleton with an HTML entrypoint and icon.
-
 ## Package
 
 ```powershell
 .\tools\make-lypkg.ps1 -AppDirectory .\my-app -Output .\dist\my-app-1.0.0.lypkg
 ```
 
-The packager regenerates SHA-256 checksums and validates the manifest before producing the archive.
-
 ## Install
 
-Install through **LYCAN Store → Import .LYPKG**. Installation is explicit; downloaded packages are not executed automatically.
+Use **LYCAN Store → Import .LYPKG** or the repository download action. Installation validates the manifest and every SHA-256 entry before registering the package with ARES.
 
 ## Design rules
 
-Keep application state in the package's private guest storage area. Avoid Windows paths. Request the smallest permission set necessary for the application. Treat the package surface as a web application, not as a mechanism for escaping LYCAN's guest boundary.
+Keep application state inside `lycanApp.storage`. Never assume Windows paths. Do not use filesystem APIs from package code. Treat the package browser surface as a guest UI, not a route around the LYCAN boundary.
