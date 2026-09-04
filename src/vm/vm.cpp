@@ -1,6 +1,8 @@
 #include "vm.h"
 #include <algorithm>
+#include <cctype>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 namespace lycan {
@@ -23,6 +25,7 @@ bool hasParentTraversal(const std::filesystem::path& p){
 }
 
 bool isPathSeparator(char c){ return c=='/' || c=='\\'; }
+bool validIdChar(char c){ return std::isalnum(static_cast<unsigned char>(c)) || c=='_' || c=='-' || c=='.'; }
 }
 
 VirtualMachine::VirtualMachine(std::filesystem::path root):root_(std::move(root)){}
@@ -70,6 +73,16 @@ bool VirtualMachine::isGuestRoot(const std::filesystem::path&p) const{
     return !a&&!b&&base==target;
 }
 
+bool VirtualMachine::validSnapshotName(const std::string& name) const{
+    if(name.empty() || name.size()>64 || name=="." || name=="..") return false;
+    for(char c:name) if(!validIdChar(c) || isPathSeparator(c)) return false;
+    return true;
+}
+
+std::filesystem::path VirtualMachine::snapshotPath(const std::string& name) const{
+    return root_/"snapshots"/(name+".snap");
+}
+
 std::string VirtualMachine::ls(const std::string&p) const{
     const auto d=guestPath(p);
     if(!validGuestPath(d) && !isGuestRoot(d)) return "ACCESS DENIED: OUTSIDE LYFS";
@@ -82,6 +95,27 @@ std::string VirtualMachine::ls(const std::string&p) const{
         o+="  "+i.path().filename().string()+"\n";
     }
     return o.empty()?"(empty)":o;
+}
+
+std::string VirtualMachine::tree(const std::string&p) const{
+    const auto base=guestPath(p);
+    if(!validGuestPath(base) && !isGuestRoot(base)) return "ACCESS DENIED: OUTSIDE LYFS";
+    if(!std::filesystem::is_directory(base)) return "NOT A DIRECTORY";
+    std::string o;
+    std::function<void(const std::filesystem::path&,std::string)> walk=[&](const auto& dir,std::string prefix){
+        std::vector<std::filesystem::directory_entry> entries;
+        for(const auto& e:std::filesystem::directory_iterator(dir)) entries.push_back(e);
+        std::sort(entries.begin(),entries.end(),[](const auto&a,const auto&b){return a.path().filename().string()<b.path().filename().string();});
+        for(std::size_t i=0;i<entries.size();++i){
+            const auto& e=entries[i]; const bool last=i+1==entries.size();
+            o+=prefix+(last?"└─ ":"├─ ")+e.path().filename().string();
+            if(e.is_directory() && !e.is_symlink()){o+="/\n";walk(e.path(),prefix+(last?"   ":"│  "));}
+            else{o+="\n";}
+        }
+    };
+    o=base.filename().string()+"/\n";
+    walk(base," ");
+    return o;
 }
 
 std::string VirtualMachine::apps() const{
@@ -98,37 +132,122 @@ std::string VirtualMachine::ps() const{
 
 std::string VirtualMachine::snapshots() const{
     std::string o="SNAPSHOTS\n---------\n";
-    bool any=false;
+    std::vector<std::string> names;
     for(auto&i:std::filesystem::directory_iterator(root_/"snapshots"))
-        if(i.path().extension()==".snap"){any=true;o+=i.path().stem().string()+"\n";}
-    return any?o:o+"(none)\n";
+        if(i.path().extension()==".snap") names.push_back(i.path().stem().string());
+    std::sort(names.begin(),names.end());
+    if(names.empty()) return o+"(none)\n";
+    for(const auto& n:names) o+=n+"\n";
+    return o;
 }
 
 std::string VirtualMachine::diagnostics() const{
-    return asciiLogo()+"LYCAN SYSTEM\n----------------\n"
-        "ARES CPU      ONLINE\n"
-        "VIRTUAL RAM   "+std::to_string(ramBytes_/1048576ULL)+" MB\n"
-        "LYFS          ISOLATED\n"
-        "GUEST ROOT    LOCALIZED\n"
-        "HOST ACCESS   DENIED\n"
-        "SYMLINKS      RESTRICTED\n"
-        "SECURITY      ENFORCED\n"
-        "NETWORK       "+std::string(network_?"ONLINE":"OFFLINE")+"\n"
-        "CYCLES        "+std::to_string(cycles_)+"\n"
-        "PROCESSES     "+std::to_string(processes_.size())+"\n"
-        "APPS          "+std::to_string(installed_.size())+"\n";
+    std::size_t fileCount=0,dirCount=0,bytes=0;
+    std::error_code ec;
+    if(std::filesystem::exists(root_,ec)){
+        for(auto it=std::filesystem::recursive_directory_iterator(root_,std::filesystem::directory_options::skip_permission_denied,ec); it!=std::filesystem::recursive_directory_iterator(); it.increment(ec)){
+            if(ec){ec.clear();continue;}
+            if(it->is_regular_file(ec)){++fileCount;bytes += static_cast<std::size_t>(it->file_size(ec));}
+            else if(it->is_directory(ec)) ++dirCount;
+        }
+    }
+    std::ostringstream o;
+    o<<asciiLogo()
+     <<"LYCAN DIAGNOSTIC CORE\n"
+     <<"=====================\n"
+     <<"RUNTIME             ONLINE\n"
+     <<"ARES CPU            ONLINE\n"
+     <<"VIRTUAL RAM         "<<ramBytes_/1048576ULL<<" MB\n"
+     <<"LYFS                ISOLATED\n"
+     <<"GUEST ROOT          LOCALIZED\n"
+     <<"HOST ACCESS         DENIED\n"
+     <<"SYMLINK POLICY      RESTRICTED\n"
+     <<"NETWORK             "<<(network_?"ONLINE":"OFFLINE")<<"\n"
+     <<"PROCESSES           "<<processes_.size()<<"\n"
+     <<"PACKAGES            "<<installed_.size()<<"\n"
+     <<"GUEST FILES         "<<fileCount<<"\n"
+     <<"GUEST DIRECTORIES   "<<dirCount<<"\n"
+     <<"GUEST DATA          "<<bytes/1024<<" KB\n"
+     <<"SNAPSHOTS           ";
+    std::size_t snaps=0;
+    for(auto&i:std::filesystem::directory_iterator(root_/"snapshots",ec)) if(i.path().extension()==".snap") ++snaps;
+    o<<snaps<<"\n"
+     <<"VM CYCLES           "<<cycles_<<"\n"
+     <<"SECURITY            ENFORCED\n";
+    return o.str();
+}
+
+std::string VirtualMachine::snapshotCreate(const std::string& name){
+    if(!validSnapshotName(name)) return "INVALID SNAPSHOT NAME";
+    std::ofstream f(snapshotPath(name),std::ios::trunc);
+    if(!f) return "SNAPSHOT WRITE FAILED";
+    f<<"LYCAN-SNAPSHOT 1\n"
+     <<"cycles="<<cycles_<<"\n"
+     <<"network="<<(network_?"on":"off")<<"\n"
+     <<"next_pid="<<nextPid_<<"\n"
+     <<"processes=";
+    for(std::size_t i=0;i<processes_.size();++i){ if(i) f<<";"; f<<processes_[i].pid<<","<<processes_[i].name<<","<<processes_[i].state; }
+    f<<"\n";
+    f<<"packages=";
+    bool first=true; for(const auto& [id,v]:installed_){ if(!first) f<<";"; first=false; f<<id<<","<<v; }
+    f<<"\n";
+    return "SNAPSHOT SAVED "+name;
+}
+
+std::string VirtualMachine::snapshotInfo(const std::string& name) const{
+    if(!validSnapshotName(name)) return "INVALID SNAPSHOT NAME";
+    std::ifstream f(snapshotPath(name)); if(!f) return "SNAPSHOT NOT FOUND";
+    std::string content((std::istreambuf_iterator<char>(f)),std::istreambuf_iterator<char>());
+    return content;
+}
+
+std::string VirtualMachine::snapshotRestore(const std::string& name){
+    if(!validSnapshotName(name)) return "INVALID SNAPSHOT NAME";
+    std::ifstream f(snapshotPath(name)); if(!f) return "SNAPSHOT NOT FOUND";
+    std::string line,header; std::getline(f,header);
+    if(header!="LYCAN-SNAPSHOT 1") return "INVALID SNAPSHOT FORMAT";
+    std::vector<Process> restored;
+    std::map<std::string,std::string> packages=installed_;
+    uint64_t cycles=cycles_; bool network=network_; uint32_t nextPid=nextPid_;
+    while(std::getline(f,line)){
+        auto eq=line.find('='); if(eq==std::string::npos) continue;
+        const auto key=line.substr(0,eq),value=line.substr(eq+1);
+        try{
+            if(key=="cycles") cycles=std::stoull(value);
+            else if(key=="network") network=value=="on";
+            else if(key=="next_pid") nextPid=static_cast<uint32_t>(std::stoul(value));
+            else if(key=="processes"){
+                restored.clear(); std::stringstream ss(value); std::string item;
+                while(std::getline(ss,item,';')){std::stringstream row(item);std::string a,b,c;if(std::getline(row,a,',')&&std::getline(row,b,',')&&std::getline(row,c,',')) restored.push_back({static_cast<uint32_t>(std::stoul(a)),b,c});}
+            } else if(key=="packages"){
+                packages.clear(); std::stringstream ss(value); std::string item;
+                while(std::getline(ss,item,';')){auto comma=item.find(',');if(comma!=std::string::npos) packages[item.substr(0,comma)]=item.substr(comma+1);}
+            }
+        }catch(...){ return "INVALID SNAPSHOT DATA"; }
+    }
+    if(restored.empty()) return "INVALID SNAPSHOT DATA";
+    cycles_=cycles; network_=network; nextPid_=nextPid; processes_=std::move(restored); installed_=std::move(packages);
+    return "SNAPSHOT RESTORED "+name;
+}
+
+std::string VirtualMachine::snapshotDelete(const std::string& name){
+    if(!validSnapshotName(name)) return "INVALID SNAPSHOT NAME";
+    std::error_code ec; if(!std::filesystem::remove(snapshotPath(name),ec)) return ec?"SNAPSHOT DELETE FAILED":"SNAPSHOT NOT FOUND";
+    return "SNAPSHOT DELETED "+name;
 }
 
 std::string VirtualMachine::execute(const std::string&c){
     ++cycles_;
     if(c=="ping") return "LYCAN VM ONLINE";
     if(c=="version") return "LYCAN OS 1.0.0\nARES VIRTUAL CORE 1.0\nGUEST ABI 1";
-    if(c=="help") return "logo | ping | version | help | diagnostics | pwd | ls [path] | cat <path> | write <path> <text> | mkdir <path> | touch <path> | rm <path> | apps | ps | network [on|off] | open <app> | close <app> | snapshots | snapshot <name> | web start | web tab <url>";
+    if(c=="help") return "logo | ping | version | help | diagnostics | pwd | ls [path] | tree [path] | cat <path> | write <path> <text> | mkdir <path> | touch <path> | rm <path> | apps | ps | network [on|off] | open <app> | close <app> | snapshots | snapshot <name> | snapshot-info <name> | restore <name> | delete-snapshot <name> | web start | web tab <url>";
     if(c=="logo") return asciiLogo();
     if(c=="pwd") return "/home";
     if(c=="diagnostics") return diagnostics();
     if(c=="ls") return ls("/home");
     if(c.rfind("ls ",0)==0) return ls(c.substr(3));
+    if(c=="tree") return tree("/home");
+    if(c.rfind("tree ",0)==0) return tree(c.substr(5));
     if(c=="apps") return apps();
     if(c=="ps") return ps();
     if(c=="snapshots") return snapshots();
@@ -199,14 +318,11 @@ std::string VirtualMachine::execute(const std::string&c){
         return e?"REMOVE FAILED":"REMOVED "+std::to_string(n)+" ITEM(S)";
     }
 
-    if(c.rfind("snapshot ",0)==0){
-        auto n=c.substr(9);
-        if(n.empty()) return "SNAPSHOT NAME REQUIRED";
-        for(char ch:n) if(isPathSeparator(ch)) return "INVALID SNAPSHOT NAME";
-        std::ofstream(root_/"snapshots"/(n+".snap"))
-            <<"LYCAN SNAPSHOT\ncycles="<<cycles_<<"\nnetwork="<<(network_?"on":"off")<<"\nprocesses="<<processes_.size()<<"\n";
-        return "SNAPSHOT SAVED "+n;
-    }
+    if(c.rfind("snapshot-info ",0)==0) return snapshotInfo(c.substr(15));
+    if(c.rfind("restore ",0)==0) return snapshotRestore(c.substr(8));
+    if(c.rfind("delete-snapshot ",0)==0) return snapshotDelete(c.substr(16));
+    if(c.rfind("snapshot ",0)==0) return snapshotCreate(c.substr(9));
+
     return "UNKNOWN COMMAND";
 }
 }
