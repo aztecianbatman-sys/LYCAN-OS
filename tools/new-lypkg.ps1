@@ -2,19 +2,24 @@ param(
   [Parameter(Mandatory=$true)][string]$Id,
   [Parameter(Mandatory=$true)][string]$Name,
   [string]$Version = '1.0.0',
+  [int]$StorageQuotaMB = 16,
+  [string[]]$Permissions = @('storage'),
   [string]$Output = '.'
 )
 
 $ErrorActionPreference = 'Stop'
-
 if ($Id -notmatch '^[a-z0-9][a-z0-9._-]{1,63}$') { throw 'Id must match ^[a-z0-9][a-z0-9._-]{1,63}$' }
 if ($Version -notmatch '^([0-9]+)\.([0-9]+)\.([0-9]+)([-+][0-9A-Za-z.-]+)?$') { throw 'Version must be semver-like, e.g. 1.0.0' }
+if ($StorageQuotaMB -lt 1 -or $StorageQuotaMB -gt 1024) { throw 'StorageQuotaMB must be between 1 and 1024' }
+$allowed = @('storage','network','external','notifications','clipboard-read','clipboard-write')
+foreach($permission in $Permissions) { if($allowed -notcontains $permission) { throw "Unsupported permission: $permission" } }
 
 $root = Join-Path (Resolve-Path $Output).Path $Id
 if (Test-Path $root) { throw "Directory already exists: $root" }
 New-Item -ItemType Directory -Path (Join-Path $root 'app') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $root 'app/assets') -Force | Out-Null
 
+$permissionJson = (($Permissions | ForEach-Object { '    "' + $_ + '"' }) -join ",`n")
 @"
 {
   "format": 1,
@@ -26,8 +31,9 @@ New-Item -ItemType Directory -Path (Join-Path $root 'app/assets') -Force | Out-N
   "entry": "app/index.html",
   "icon": "app/assets/icon.svg",
   "permissions": [
-    "storage"
-  ]
+$permissionJson
+  ],
+  "storageQuotaMB": $StorageQuotaMB
 }
 "@ | Set-Content -LiteralPath (Join-Path $root 'manifest.json') -Encoding UTF8
 
@@ -69,9 +75,12 @@ LYCAN guest application generated from the LYPKG starter.
 ..\..\tools\make-lypkg.ps1 -AppDirectory . -Output ..\$Id-$Version.lypkg
 ```
 
+The generated manifest uses a $StorageQuotaMB MB guest storage quota and permissions: $($Permissions -join ', ').
+
 Edit `manifest.json` and the contents of `app/`, then rebuild the package.
 "@ | Set-Content -LiteralPath (Join-Path $root 'README.md') -Encoding UTF8
 
 Write-Host "Created LYPKG project: $root"
-Write-Host "Entry: app/index.html"
+Write-Host "Storage quota: $StorageQuotaMB MB"
+Write-Host "Permissions: $($Permissions -join ', ')"
 Write-Host "Run tools/make-lypkg.ps1 to package it."
