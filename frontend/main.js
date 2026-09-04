@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const https = require('https');
 const { execFile } = require('child_process');
 const { LycanVM } = require('./vm');
+require('./vm-extensions');
 
 let mainWindow = null;
 let isQuitting = false;
@@ -19,7 +20,6 @@ function safeId(id){ return /^[a-z0-9][a-z0-9._-]{1,63}$/.test(String(id||'')); 
 function sha256(file){ const h=crypto.createHash('sha256'); h.update(fs.readFileSync(file)); return h.digest('hex'); }
 function normalizePermissions(m){ const p=Array.isArray(m.permissions)?m.permissions.map(x=>String(x).trim().toLowerCase()):[]; if(p.some(x=>!PACKAGE_PERMISSIONS.has(x))) throw new Error('Unsupported package permission'); return [...new Set(p)]; }
 function quota(m){ const n=Number(m.storageQuotaMB ?? 16); if(!Number.isInteger(n)||n<1||n>1024) throw new Error('storageQuotaMB must be 1-1024'); return n; }
-
 function listPackages(){
   fs.mkdirSync(packageRoot(),{recursive:true}); const result=[];
   for(const e of fs.readdirSync(packageRoot(),{withFileTypes:true})){
@@ -34,21 +34,18 @@ function packageEntry(id){
   const manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.json'),'utf8')); const entry=String(manifest.entry||'app/index.html').replace(/\\/g,'/'); if(entry.startsWith('/')||entry.includes('../')) throw new Error('Invalid package entry');
   const file=path.resolve(dir,entry); if(!file.startsWith(dir+path.sep)||!fs.existsSync(file)) throw new Error('Package entrypoint not found'); return {dir,file,manifest,permissions:normalizePermissions(manifest)};
 }
-
 function createWindow(){
   mainWindow = new BrowserWindow({width:1440,height:920,minWidth:1080,minHeight:700,show:false,frame:false,backgroundColor:'#030508',title:'LYCAN OS',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:false}});
   mainWindow.setMenuBarVisibility(false); mainWindow.loadFile(path.join(__dirname,'index.html'));
   mainWindow.once('ready-to-show',()=>mainWindow.show());
   mainWindow.on('close',event=>{ if(!isQuitting){ event.preventDefault(); mainWindow.hide(); } });
 }
-
 function openGecko(url='about:blank'){
   const candidates=[]; if(process.env.LYCAN_GECKO_PATH)candidates.push(process.env.LYCAN_GECKO_PATH); if(process.env.PROGRAMFILES)candidates.push(path.join(process.env.PROGRAMFILES,'Mozilla Firefox','firefox.exe')); if(process.env['PROGRAMFILES(X86)'])candidates.push(path.join(process.env['PROGRAMFILES(X86)'],'Mozilla Firefox','firefox.exe')); if(process.env.LOCALAPPDATA)candidates.push(path.join(process.env.LOCALAPPDATA,'Mozilla Firefox','firefox.exe'));
   const exe=candidates.find(p=>fs.existsSync(p)); if(!exe)return{ok:false,error:'Firefox/Gecko was not found. Install Firefox or set LYCAN_GECKO_PATH.'};
   if(!/^NETWORK ONLINE/m.test(vm.cmd('network status')))return{ok:false,error:'LYCAN guest network is offline.'};
   const profile=path.join(rootPath(),'gecko-profile'); fs.mkdirSync(profile,{recursive:true}); const child=execFile(exe,['-profile',profile,'-new-instance','-private-window',String(url||'about:blank')],{windowsHide:false}); child.unref(); return{ok:true,engine:'Gecko',profile};
 }
-
 function installPackage(filePath){
   return new Promise((resolve,reject)=>{
     const source=path.resolve(String(filePath||'')); if(!source.toLowerCase().endsWith('.lypkg'))return reject(new Error('Select a .lypkg file')); if(!fs.existsSync(source))return reject(new Error('Package file not found'));
