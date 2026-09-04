@@ -13,6 +13,7 @@ struct Process {
     std::string state;
     std::string error;
     uint64_t memoryBytes{};
+    uint64_t pageStart{};
 };
 
 struct AppRecord {
