@@ -1,6 +1,6 @@
 {
   "name": "lycan-os-shell",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "LYCAN OS radial desktop shell",
   "main": "main.js",
@@ -14,13 +14,13 @@
     "electron-builder": "26.0.12"
   },
   "build": {
-    "appId": "com.lycan.os",
-    "productName": "LYCAN OS",
+    "appId": "com.lycan.os.v121",
+    "productName": "LYCAN OS 1.2.1",
     "directories": { "output": "dist" },
     "asar": true,
     "files": ["main.js", "preload.js", "package-preload.js", "index.html", "renderer.js", "windowing.js", "launcher.js", "store.js", "store-repository.json", "crawford.js", "runtime.js", "styles.css", "advanced.css", "store.css", "launcher.css", "crawford.css", "runtime.css", "assets/**/*"],
     "extraResources": [{"from":"../build/Release/lycan-backend.exe","to":"lycan-backend.exe"}],
     "win": {"target":[{"target":"nsis","arch":["x64"]}],"artifactName":"LYCAN-OS-${version}-Setup-${arch}.exe"},
-    "nsis": {"oneClick":false,"perMachine":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":true,"createStartMenuShortcut":true}
+    "nsis": {"oneClick":false,"perMachine":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":true,"createStartMenuShortcut":true,"shortcutName":"LYCAN OS 1.2.1"}
   }
 }
