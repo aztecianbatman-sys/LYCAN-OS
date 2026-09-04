@@ -1,5 +1,4 @@
 const { contextBridge, ipcRenderer } = require('electron');
-
 const call = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 contextBridge.exposeInMainWorld('lycanApp', {
   id: () => ipcRenderer.sendSync('lycan:package-id'),
@@ -15,6 +14,12 @@ contextBridge.exposeInMainWorld('lycanApp', {
   },
   network: {
     status: () => call('lycan:app-network-status')
+  },
+  runtime: {
+    memory: () => call('lycan:app-runtime', 'memory'),
+    processes: () => call('lycan:app-runtime', 'ps'),
+    packages: () => call('lycan:app-runtime', 'apps'),
+    diagnostics: () => call('lycan:app-runtime', 'diagnostics')
   },
   notify: (title, body) => call('lycan:package-notify', String(title || 'LYCAN'), String(body || ''))
 });
