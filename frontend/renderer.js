@@ -33,4 +33,6 @@ async function runAction(id,a){try{let out='';if(a==='terminal'){const win=open.
 document.addEventListener('click',e=>{const a=e.target.closest('[data-app]')?.dataset.app;if(a)openApp(a);if(e.target.id==='logo')scene.classList.toggle('node-open')});
 document.addEventListener('mousemove',e=>{const threshold=76;const edge=e.clientX<threshold?'left':e.clientX>innerWidth-threshold?'right':'';if(edge!==lastEdge){lastEdge=edge;scene.classList.toggle('edge-left',edge==='left');scene.classList.toggle('edge-right',edge==='right')}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(document.querySelector('.launcher-shell.visible'))return;for(const [id,w] of open){w.remove()}open.clear();scene.classList.remove('node-open')}if(e.key===' '&&!e.target.matches('input,textarea'))scene.classList.toggle('node-open')});
-wireNodeMotion();vmState.textContent='ONLINE';toast('ARES virtual environment online');
+wireNodeMotion();
+async function bootHandshake(){vmState.textContent='BOOTING';scene.classList.add('vm-booting');try{await new Promise(r=>setTimeout(r,450));const pong=await vm('ping');if(pong!=='LYCAN VM ONLINE')throw new Error('Unexpected VM response');await new Promise(r=>setTimeout(r,350));vmState.textContent='ONLINE';scene.classList.remove('vm-booting');toast('ARES virtual environment online');}catch(e){vmState.textContent='OFFLINE';scene.classList.remove('vm-booting');toast(`VM CONNECTION FAILED: ${e.message}`)}}
+bootHandshake();
