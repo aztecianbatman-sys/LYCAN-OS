@@ -4,6 +4,20 @@
 #include <sstream>
 
 namespace lycan {
+namespace {
+std::string asciiLogo(){
+    return
+        "       /\\       /\\\n"
+        "      /  \\_____/  \\     LYCAN\n"
+        "     /             \\    VIRTUAL CORE\n"
+        "    /   <\\\"  \">   \\\n"
+        "   |      \\____/      |\n"
+        "   |   /\\        /\\   |\n"
+        "    \\_/  \\______/  \\_/\n"
+        "       \\__LYCAN__/\n";
+}
+}
+
 VirtualMachine::VirtualMachine(std::filesystem::path root):root_(std::move(root)){}
 void VirtualMachine::boot(){
     std::filesystem::create_directories(root_/"home");
@@ -20,10 +34,11 @@ std::string VirtualMachine::ls(const std::string&p) const{auto d=guestPath(p);if
 std::string VirtualMachine::apps() const{std::string o="INSTALLED APPLICATIONS\n----------------------\n";for(auto&[id,v]:installed_)o+=id+"  "+v+"\n";return o;}
 std::string VirtualMachine::ps() const{std::string o="PID   NAME              STATE\n-------------------------------\n";for(auto&p:processes_)o+=std::to_string(p.pid)+"   "+p.name+"              "+p.state+"\n";return o;}
 std::string VirtualMachine::snapshots() const{std::string o="SNAPSHOTS\n---------\n";bool any=false;for(auto&i:std::filesystem::directory_iterator(root_/"snapshots"))if(i.path().extension()==".snap"){any=true;o+=i.path().stem().string()+"\n";}return any?o:o+"(none)\n";}
-std::string VirtualMachine::diagnostics() const{return "LYCAN SYSTEM\n----------------\nARES CPU      ONLINE\nVIRTUAL RAM   "+std::to_string(ramBytes_/1048576ULL)+" MB\nLYFS          ONLINE\nSECURITY      ENFORCED\nNETWORK       "+std::string(network_?"ONLINE":"OFFLINE")+"\nCYCLES        "+std::to_string(cycles_)+"\nPROCESSES     "+std::to_string(processes_.size())+"\nAPPS          "+std::to_string(installed_.size())+"\n";}
+std::string VirtualMachine::diagnostics() const{return asciiLogo()+"LYCAN SYSTEM\n----------------\nARES CPU      ONLINE\nVIRTUAL RAM   "+std::to_string(ramBytes_/1048576ULL)+" MB\nLYFS          ONLINE\nSECURITY      ENFORCED\nNETWORK       "+std::string(network_?"ONLINE":"OFFLINE")+"\nCYCLES        "+std::to_string(cycles_)+"\nPROCESSES     "+std::to_string(processes_.size())+"\nAPPS          "+std::to_string(installed_.size())+"\n";}
 std::string VirtualMachine::execute(const std::string&c){
  ++cycles_;
- if(c=="help")return "help | diagnostics | ls [path] | cat <path> | write <path> <text> | mkdir <path> | touch <path> | rm <path> | apps | ps | network [on|off] | open <app> | close <app> | snapshots | snapshot <name> | web start | web tab <url>";
+ if(c=="help")return "logo | help | diagnostics | ls [path] | cat <path> | write <path> <text> | mkdir <path> | touch <path> | rm <path> | apps | ps | network [on|off] | open <app> | close <app> | snapshots | snapshot <name> | web start | web tab <url>";
+ if(c=="logo")return asciiLogo();
  if(c=="diagnostics")return diagnostics();if(c=="ls")return ls("/home");if(c.rfind("ls ",0)==0)return ls(c.substr(3));if(c=="apps")return apps();if(c=="ps")return ps();if(c=="snapshots")return snapshots();if(c=="network")return network_?"NETWORK ONLINE":"NETWORK OFFLINE";if(c=="network on"){network_=true;return "NETWORK ONLINE";}if(c=="network off"){network_=false;return "NETWORK OFFLINE";}
  if(c=="web start")return network_?"GECKO RUNTIME READY":"NETWORK OFFLINE";if(c.rfind("web tab ",0)==0){auto u=c.substr(8);if(u.empty())return "URL REQUIRED";return network_?"GECKO TAB OPENED\n"+u:"NETWORK OFFLINE";}
  if(c.rfind("open ",0)==0){auto id=c.substr(5);if(!installed_.contains(id))return "APP NOT FOUND";if(std::find_if(processes_.begin(),processes_.end(),[&](const Process&p){return p.name==id&&p.pid>2;})!=processes_.end())return "APP ALREADY RUNNING";processes_.push_back({nextPid_++,id,"RUNNING"});return "OPENED "+id;}
