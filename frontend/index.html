@@ -18,10 +18,20 @@
   <aside class="status-column status-right"><div class="rail-title">SECURITY // GUEST</div><div class="metric"><span>HOST</span><b>DENIED</b></div><div class="metric"><span>FS</span><b>LYFS</b></div><div class="metric"><span>NET</span><b id="netState">ON</b></div><div class="vertical-word">HOST ISOLATED</div></aside>
   <div id="leftRail" class="node-rail left"></div><div id="rightRail" class="node-rail right"></div><main id="desktopWindows" class="windows"></main>
   <div class="edge-marker edge-marker-left"><span></span>APPLICATIONS</div><div class="edge-marker edge-marker-right">SYSTEM<span></span></div>
-  <footer class="os-footer"><span>LYCAN OS 1.1</span><span>WINDOWS HOST // GUEST SPACE</span><span>SPACE OPEN/CLOSE</span><span>CTRL+K COMMAND</span></footer>
-  <div class="command-dock"><span class="dock-prompt">LYCAN://</span><button id="dockLaunch">OPEN LAUNCHER</button><span class="dock-note">MOVE TO AN EDGE TO REVEAL NODES</span></div><div id="toastStack" class="toast-stack"></div>
+  <footer class="os-footer"><span>LYCAN OS 1.2</span><span>WINDOWS HOST // GUEST SPACE</span><span>SPACE OPEN/CLOSE</span><span>CTRL+K COMMAND</span></footer>
+  <div class="command-dock"><span class="dock-prompt">LYCAN://</span><button id="dockLaunch">OPEN LAUNCHER</button><span class="dock-note">NODES READY // MOVE TO AN EDGE</span></div><div id="toastStack" class="toast-stack"></div>
 </div>
 <script src="renderer.js"></script><script src="windowing.js"></script><script src="launcher.js"></script><script src="store.js"></script><script src="crawford.js"></script><script src="runtime.js"></script>
-<script>document.addEventListener('click',e=>{const a=e.target.closest('[data-native-window]')?.dataset.nativeWindow;if(a)window.lycan?.window(a);if(e.target.closest('#dockLaunch'))document.querySelector('.launcher-shell')?.classList.add('visible')});</script>
+<script>
+(()=>{
+  const scene=document.getElementById('scene');
+  scene?.classList.add('node-open');
+  document.addEventListener('click',e=>{
+    const a=e.target.closest('[data-native-window]')?.dataset.nativeWindow;
+    if(a)window.lycan?.window(a);
+    if(e.target.closest('#dockLaunch'))document.querySelector('.launcher-shell')?.classList.add('visible');
+  });
+})();
+</script>
 </body>
 </html>
