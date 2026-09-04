@@ -22,6 +22,6 @@
     "files": ["bootstrap.js", "main.js", "preload.js", "package-preload.js", "index.html", "renderer.js", "windowing.js", "launcher.js", "store.js", "store-repository.json", "crawford.js", "runtime.js", "styles.css", "advanced.css", "store.css", "launcher.css", "crawford.css", "runtime.css", "assets/**/*"],
     "extraResources": [{"from":"../build/Release/lycan-backend.exe","to":"lycan-backend.exe"}],
     "win": {"target":[{"target":"nsis","arch":["x64"]}],"artifactName":"LYCAN-OS-${version}-Setup-${arch}.exe"},
-    "nsis": {"oneClick":false,"perMachine":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":true,"createStartMenuShortcut":true,"shortcutName":"LYCAN OS","include":"../installer/lycan.nsh"}
+    "nsis": {"oneClick":false,"perMachine":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":false,"createStartMenuShortcut":false,"shortcutName":"LYCAN OS","include":"../installer/lycan.nsh"}
   }
 }
