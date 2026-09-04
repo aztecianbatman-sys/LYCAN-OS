@@ -1,6 +1,6 @@
 {
   "name":"lycan-os",
-  "version":"2.3.0",
+  "version":"2.3.1",
   "private":true,
   "description":"LYCAN OS — pure Electron guest operating environment",
   "main":"main.js",
@@ -10,5 +10,5 @@
     "test:runtime":"node test-runtime.js",
     "package":"electron-packager . LYCAN-OS --platform=win32 --arch=x64 --overwrite --out=dist"
   },
-  "devDependencies":{"electron":"44.1.1","electron-packager":"18.3.0"}
+  "devDependencies":{"electron":"44.1.1","electron-packager":"18.2.1"}
 }
