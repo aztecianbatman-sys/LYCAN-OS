@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "../network/network.h"
 
 namespace lycan {
 
@@ -74,6 +75,7 @@ private:
     std::filesystem::path snapshotFsPath(const std::string& name) const;
 
     std::filesystem::path root_;
+    NetworkStack networkStack_;
     uint64_t cycles_{0};
     uint64_t ramBytes_{536870912ULL};
     uint64_t usedMemoryBytes_{0};
