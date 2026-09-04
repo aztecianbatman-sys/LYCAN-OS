@@ -24,6 +24,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm install
+      - name: Validate Electron packaging wiring
+        working-directory: frontend
+        run: npm run test:packaging
       - name: Build LYCAN desktop installer
         working-directory: frontend
         run: npm run build:win
