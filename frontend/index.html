@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#05070a">
 <title>LYCAN OS</title>
-<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="advanced.css"><link rel="stylesheet" href="store.css"><link rel="stylesheet" href="launcher.css"><link rel="stylesheet" href="crawford.css">
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="advanced.css"><link rel="stylesheet" href="store.css"><link rel="stylesheet" href="launcher.css"><link rel="stylesheet" href="crawford.css"><link rel="stylesheet" href="runtime.css">
 </head>
 <body>
 <div id="scene" class="scene">
@@ -18,10 +18,10 @@
   <aside class="status-column status-right"><div class="rail-title">SECURITY // GUEST</div><div class="metric"><span>HOST</span><b>DENIED</b></div><div class="metric"><span>FS</span><b>LYFS</b></div><div class="metric"><span>NET</span><b id="netState">ON</b></div><div class="vertical-word">HOST ISOLATED</div></aside>
   <div id="leftRail" class="node-rail left"></div><div id="rightRail" class="node-rail right"></div><main id="desktopWindows" class="windows"></main>
   <div class="edge-marker edge-marker-left"><span></span>APPLICATIONS</div><div class="edge-marker edge-marker-right">SYSTEM<span></span></div>
-  <footer class="os-footer"><span>LYCAN OS 1.0</span><span>WINDOWS HOST // GUEST SPACE</span><span>SPACE OPEN/CLOSE</span><span>CTRL+K COMMAND</span></footer>
+  <footer class="os-footer"><span>LYCAN OS 1.1</span><span>WINDOWS HOST // GUEST SPACE</span><span>SPACE OPEN/CLOSE</span><span>CTRL+K COMMAND</span></footer>
   <div class="command-dock"><span class="dock-prompt">LYCAN://</span><button id="dockLaunch">OPEN LAUNCHER</button><span class="dock-note">MOVE TO AN EDGE TO REVEAL NODES</span></div><div id="toastStack" class="toast-stack"></div>
 </div>
-<script src="renderer.js"></script><script src="windowing.js"></script><script src="launcher.js"></script><script src="store.js"></script><script src="crawford.js"></script>
+<script src="renderer.js"></script><script src="windowing.js"></script><script src="launcher.js"></script><script src="store.js"></script><script src="crawford.js"></script><script src="runtime.js"></script>
 <script>document.addEventListener('click',e=>{const a=e.target.closest('[data-native-window]')?.dataset.nativeWindow;if(a)window.lycan?.window(a);if(e.target.closest('#dockLaunch'))document.querySelector('.launcher-shell')?.classList.add('visible')});</script>
 </body>
 </html>
