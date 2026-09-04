@@ -6,6 +6,7 @@
   "main": "bootstrap.js",
   "scripts": {
     "start": "electron .",
+    "test:packaging": "node smoke-test.js",
     "build:dir": "electron-builder --win --x64 --dir",
     "build:win": "electron-builder --win --x64"
   },
