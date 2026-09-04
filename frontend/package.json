@@ -1,12 +1,13 @@
 {
   "name": "lycan-os",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "LYCAN OS — pure Electron guest operating environment",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check vm.js && node --check preload.js && node --check renderer.js && node --check launcher.js && node --check store.js && node --check crawford.js && node --check runtime.js && node vm-test.js",
+    "check": "node --check main.js && node --check vm.js && node --check vm-extensions.js && node --check preload.js && node --check renderer.js && node --check launcher.js && node --check store.js && node --check crawford.js && node --check runtime.js && node test-runtime.js",
+    "test:runtime": "node test-runtime.js",
     "package": "electron-packager . LYCAN-OS --platform=win32 --arch=x64 --overwrite --out=dist"
   },
   "devDependencies": {
