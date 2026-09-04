@@ -18,11 +18,13 @@ public:
 private:
     std::string diagnostics() const;
     std::string ls(const std::string& path) const;
+    std::string tree(const std::string& path) const;
     std::string apps() const;
     std::string ps() const;
     std::string snapshots() const;
     std::filesystem::path guestPath(const std::string& path) const;
     bool validGuestPath(const std::filesystem::path& path) const;
+    bool isGuestRoot(const std::filesystem::path& path) const;
     std::filesystem::path root_;
     uint64_t cycles_{0};
     uint64_t ramBytes_{536870912ULL};
