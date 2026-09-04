@@ -1,28 +1,16 @@
 {
-  "name": "lycan-os-shell",
-  "version": "1.2.1",
+  "name": "lycan-os",
+  "version": "2.0.0",
   "private": true,
-  "description": "LYCAN OS radial desktop shell",
-  "main": "bootstrap.js",
+  "description": "LYCAN OS — pure Electron guest operating environment",
+  "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test:packaging": "node smoke-test.js",
-    "build:dir": "electron-builder --win --x64 --dir",
-    "build:win": "electron-builder --win --x64"
+    "check": "node --check main.js && node --check vm.js && node --check preload.js && node --check renderer.js && node --check launcher.js && node --check store.js && node --check crawford.js && node --check runtime.js",
+    "package": "electron-packager . LYCAN-OS --platform=win32 --arch=x64 --overwrite --out=dist"
   },
   "devDependencies": {
     "electron": "44.1.1",
-    "electron-builder": "26.0.12"
-  },
-  "build": {
-    "appId": "com.lycan.os",
-    "productName": "LYCAN OS",
-    "executableName": "LYCAN",
-    "directories": { "output": "dist" },
-    "asar": true,
-    "files": ["bootstrap.js", "main.js", "preload.js", "package-preload.js", "index.html", "renderer.js", "windowing.js", "launcher.js", "store.js", "store-repository.json", "crawford.js", "runtime.js", "styles.css", "advanced.css", "store.css", "launcher.css", "crawford.css", "runtime.css", "assets/**/*"],
-    "extraResources": [{"from":"../build/Release/lycan-backend.exe","to":"lycan-backend.exe"}],
-    "win": {"target":[{"target":"nsis","arch":["x64"]}],"artifactName":"LYCAN-OS-${version}-Setup-${arch}.exe"},
-    "nsis": {"oneClick":false,"perMachine":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":false,"createStartMenuShortcut":false,"shortcutName":"LYCAN OS","include":"../installer/lycan.nsh"}
+    "electron-packager": "18.3.0"
   }
 }
