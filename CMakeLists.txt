@@ -6,6 +6,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(lycan_vm
   src/vm/vm.cpp
+  src/vm/fs.cpp
   src/network/network.cpp
 )
 target_include_directories(lycan_vm PUBLIC src)
