@@ -62,6 +62,9 @@ private:
     bool validStoragePath(const std::filesystem::path& path) const;
     std::filesystem::path appDataRoot(const std::string& id) const;
     std::filesystem::path storagePath(const std::string& id, const std::string& bucket, const std::string& path) const;
+    bool allocateProcessMemory(Process& process);
+    void releaseProcessMemory(const Process& process);
+    void rebuildMemoryMap();
     std::filesystem::path guestPath(const std::string& path) const;
     bool validGuestPath(const std::filesystem::path& path) const;
     bool isGuestRoot(const std::filesystem::path& path) const;
@@ -76,6 +79,7 @@ private:
     bool network_{true};
     uint32_t nextPid_{3};
     uint64_t generation_{1};
+    std::vector<uint8_t> pageMap_;
     std::vector<Process> processes_;
     std::map<std::string, AppRecord> installed_;
 };
