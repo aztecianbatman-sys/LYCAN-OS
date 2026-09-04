@@ -46,5 +46,12 @@ Set-Content -LiteralPath $checksumPath -Value ($lines -join "`n") -Encoding UTF8
 $out = [IO.Path]::GetFullPath($Output)
 if ([IO.Path]::GetExtension($out) -ne '.lypkg') { $out += '.lypkg' }
 if (Test-Path $out) { Remove-Item -LiteralPath $out -Force }
-Compress-Archive -Path (Join-Path $app '*') -DestinationPath $out -CompressionLevel Optimal
+$tempZip = "$out.zip"
+if (Test-Path $tempZip) { Remove-Item -LiteralPath $tempZip -Force }
+try {
+  Compress-Archive -Path (Join-Path $app '*') -DestinationPath $tempZip -CompressionLevel Optimal
+  Move-Item -LiteralPath $tempZip -Destination $out -Force
+} finally {
+  if (Test-Path $tempZip) { Remove-Item -LiteralPath $tempZip -Force }
+}
 Write-Host "Created $out"
