@@ -13,6 +13,7 @@ int main(){
     assert(vm.execute("logo").find("LYCAN")!=std::string::npos);
     assert(vm.execute("diagnostics").find("LYCAN SYSTEM")!=std::string::npos);
     assert(vm.execute("diagnostics").find("HOST ACCESS   DENIED")!=std::string::npos);
+    assert(vm.execute("diagnostics").find("LYFS          ISOLATED")!=std::string::npos);
 
     assert(vm.execute("ls /home").find("Welcome.txt")!=std::string::npos);
     assert(vm.execute("mkdir /home/Test")=="DIRECTORY CREATED");
@@ -26,7 +27,7 @@ int main(){
     assert(vm.execute("write /../../host.txt forbidden").find("ACCESS DENIED")!=std::string::npos);
     assert(vm.execute("mkdir /..").find("ACCESS DENIED")!=std::string::npos);
     assert(vm.execute("rm /").find("REFUSED: LYFS ROOT IS IMMUTABLE")!=std::string::npos);
-    assert(vm.execute("ls /home/../system").find("(empty)")!=std::string::npos);
+    assert(vm.execute("rm /../LYCAN").find("ACCESS DENIED")!=std::string::npos);
 
     assert(vm.execute("network off")=="NETWORK OFFLINE");
     assert(vm.execute("web start")=="NETWORK OFFLINE");
