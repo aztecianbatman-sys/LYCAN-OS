@@ -22,9 +22,15 @@ private:
     std::string apps() const;
     std::string ps() const;
     std::string snapshots() const;
+    std::string snapshotCreate(const std::string& name);
+    std::string snapshotInfo(const std::string& name) const;
+    std::string snapshotRestore(const std::string& name);
+    std::string snapshotDelete(const std::string& name);
     std::filesystem::path guestPath(const std::string& path) const;
     bool validGuestPath(const std::filesystem::path& path) const;
     bool isGuestRoot(const std::filesystem::path& path) const;
+    bool validSnapshotName(const std::string& name) const;
+    std::filesystem::path snapshotPath(const std::string& name) const;
     std::filesystem::path root_;
     uint64_t cycles_{0};
     uint64_t ramBytes_{536870912ULL};
