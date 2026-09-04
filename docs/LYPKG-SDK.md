@@ -1,6 +1,6 @@
 # LYPKG SDK
 
-LYPKG is LYCAN's application package format. The SDK is intentionally small: an app is a web application contained in `app/`, described by `manifest.json`, and protected by `checksums.sha256`.
+LYPKG is LYCAN's application package format. An app is a web application contained in `app/`, described by `manifest.json`, and protected by `checksums.sha256`.
 
 ## Project layout
 
@@ -32,13 +32,19 @@ my-app/
 
 `entry` and `icon` must remain inside `app/`. When `entry` is omitted, the runtime uses `app/index.html`.
 
-Supported permission labels currently include:
+## Runtime permissions
 
-- `storage` — guest-local application storage
-- `network` — guest network access
-- `notifications` — LYCAN notification surface
+Permissions are enforced by the LYCAN package runtime. Declaring a permission is not the same as receiving Windows access.
 
-A permission declaration does not grant host access. LYCAN applications remain guest applications and cannot directly access the Windows filesystem, host processes, boot configuration, or partition layout.
+- `storage` — creates a private application data directory below the LYCAN package registry.
+- `network` — permits HTTP/HTTPS requests from the package's isolated session.
+- `external` — permits an app to request opening an HTTP/HTTPS URL in the user's external browser.
+- `clipboard-read` — reserved for the controlled clipboard API.
+- `clipboard-write` — reserved for the controlled clipboard API.
+
+Packages without `network` cannot make HTTP/HTTPS requests through their isolated Electron session. Packages without `external` cannot launch external browser URLs through the package bridge.
+
+Every package runs with `contextIsolation`, `nodeIntegration: false`, Chromium sandboxing, and a dedicated persistent session partition. Package applications cannot directly access the Windows filesystem, host processes, boot configuration, or partition layout.
 
 ## Create a project
 
@@ -54,7 +60,7 @@ This creates a ready-to-edit application skeleton with an HTML entrypoint and ic
 .\tools\make-lypkg.ps1 -AppDirectory .\my-app -Output .\dist\my-app-1.0.0.lypkg
 ```
 
-The packager regenerates SHA-256 checksums and validates the ID, version, entrypoint, icon, and permission declarations before producing the archive.
+The packager regenerates SHA-256 checksums and validates the manifest before producing the archive.
 
 ## Install
 
@@ -62,4 +68,4 @@ Install through **LYCAN Store → Import .LYPKG**. Installation is explicit; dow
 
 ## Design rules
 
-Keep application state under the guest application directory. Avoid assuming Windows paths. Treat the browser-like surface as a web UI, not as a way to escape LYCAN's guest boundary.
+Keep application state in the package's private guest storage area. Avoid Windows paths. Request the smallest permission set necessary for the application. Treat the package surface as a web application, not as a mechanism for escaping LYCAN's guest boundary.
