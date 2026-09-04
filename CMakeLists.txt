@@ -22,4 +22,8 @@ if(LYCAN_BUILD_TESTS)
   add_executable(lycan-tests tests/test_vm.cpp)
   target_link_libraries(lycan-tests PRIVATE lycan_vm)
   add_test(NAME lycan-tests COMMAND lycan-tests)
+
+  add_executable(lycan-network-tests tests/test_network.cpp)
+  target_link_libraries(lycan-network-tests PRIVATE lycan_vm)
+  add_test(NAME lycan-network-tests COMMAND lycan-network-tests)
 endif()
