@@ -6,7 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check vm.js && node --check preload.js && node --check renderer.js && node --check launcher.js && node --check store.js && node --check crawford.js && node --check runtime.js",
+    "check": "node --check main.js && node --check vm.js && node --check preload.js && node --check renderer.js && node --check launcher.js && node --check store.js && node --check crawford.js && node --check runtime.js && node vm-test.js",
     "package": "electron-packager . LYCAN-OS --platform=win32 --arch=x64 --overwrite --out=dist"
   },
   "devDependencies": {
