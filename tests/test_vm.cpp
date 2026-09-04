@@ -9,7 +9,7 @@ int main(){
     lycan::VirtualMachine vm(root); vm.boot();
 
     assert(vm.execute("ping")=="LYCAN VM ONLINE");
-    assert(vm.execute("version").find("LYCAN OS 1.1.0")!=std::string::npos);
+    assert(vm.execute("version").find("LYCAN OS 1.2.0")!=std::string::npos);
     assert(vm.execute("diagnostics").find("LYCAN DIAGNOSTIC CORE")!=std::string::npos);
     assert(vm.execute("diagnostics").find("HOST ACCESS         DENIED")!=std::string::npos);
 
@@ -34,11 +34,19 @@ int main(){
     assert(vm.execute("app state demo-notes").find("STOPPED")!=std::string::npos);
 
     assert(vm.execute("memory").find("TOTAL       512 MB")!=std::string::npos);
+    assert(vm.execute("vm pages").find("PAGE SIZE       4096 B")!=std::string::npos);
+    assert(vm.execute("vm pages").find("USED PAGES")!=std::string::npos);
+    assert(vm.execute("vm page 0").find("ALLOCATED")!=std::string::npos);
+    assert(vm.execute("vm page 2048").find("FREE")!=std::string::npos);
+    assert(vm.execute("vm page 999999999")=="PAGE OUT OF RANGE");
+
     assert(vm.execute("vm ram 768")=="RAM SET 768 MB");
     assert(vm.execute("memory").find("TOTAL       768 MB")!=std::string::npos);
+    assert(vm.execute("vm page 0").find("ALLOCATED")!=std::string::npos);
 
     assert(vm.execute("open demo-notes").find("OPENED demo-notes")!=std::string::npos);
     assert(vm.execute("app state demo-notes").find("RUNNING")!=std::string::npos);
+    assert(vm.execute("app state demo-notes").find("PAGE START")!=std::string::npos);
     assert(vm.execute("suspend demo-notes")=="SUSPENDED demo-notes");
     assert(vm.execute("app state demo-notes").find("SUSPENDED")!=std::string::npos);
     assert(vm.execute("resume demo-notes")=="RESUMED demo-notes");
@@ -61,9 +69,10 @@ int main(){
 
     assert(vm.execute("app unregister demo-notes")=="APP UNREGISTERED demo-notes");
     lycan::VirtualMachine vm2(root); vm2.boot();
-    assert(vm2.execute("version").find("LYCAN OS 1.1.0")!=std::string::npos);
+    assert(vm2.execute("version").find("LYCAN OS 1.2.0")!=std::string::npos);
     assert(vm2.execute("memory").find("TOTAL       768 MB")!=std::string::npos);
     assert(vm2.execute("network")=="NETWORK OFFLINE");
+    assert(vm2.execute("vm page 0").find("ALLOCATED")!=std::string::npos);
 
     std::filesystem::remove_all(root,ec); return 0;
 }
