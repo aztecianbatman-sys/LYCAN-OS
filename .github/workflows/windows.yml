@@ -1,4 +1,4 @@
-name: LYCAN Windows release
+name: LYCAN Electron build
 on:
   push:
     branches: [main]
@@ -7,45 +7,40 @@ on:
 permissions:
   contents: write
 jobs:
-  release:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure native VM
-        run: cmake -S . -B build -A x64
-      - name: Build native VM
-        run: cmake --build build --config Release --parallel
-      - name: Run native tests
-        run: ctest --test-dir build -C Release --output-on-failure
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install frontend dependencies
+      - name: Install Electron dependencies
         working-directory: frontend
         run: npm install
-      - name: Validate Electron packaging wiring
+      - name: Validate pure Electron runtime
         working-directory: frontend
-        run: npm run test:packaging
-      - name: Build LYCAN desktop installer
-        working-directory: frontend
-        run: npm run build:win
-      - name: Verify setup exists
+        run: npm run check
+      - name: Verify no native runtime dependency
         shell: powershell
         run: |
-          $setup = Get-ChildItem 'frontend\dist\LYCAN-OS-*-Setup-x64.exe' | Select-Object -First 1
-          if (!$setup) { throw 'LYCAN setup installer was not produced' }
+          $main = Get-Content frontend\main.js -Raw
+          if ($main -match 'lycan-backend|spawn\(') { throw 'Native backend dependency found in Electron main process' }
+          if (!(Test-Path run-lycan.bat)) { throw 'run-lycan.bat is missing' }
+      - name: Package Electron app directory
+        working-directory: frontend
+        run: npm run package
       - name: Build official Store packages
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path release-packages | Out-Null
           .\tools\make-lypkg.ps1 -AppDirectory .\store\packages\lycan-notes -Output .\release-packages\lycan-notes-1.0.0.lypkg
           .\tools\make-lypkg.ps1 -AppDirectory .\store\packages\lycan-monitor -Output .\release-packages\lycan-monitor-1.0.0.lypkg
-      - name: Upload setup installer
+      - name: Upload pure Electron app
         uses: actions/upload-artifact@v4
         with:
-          name: LYCAN-OS-Windows-x64
-          path: frontend/dist/LYCAN-OS-*-Setup-x64.exe
+          name: LYCAN-OS-Electron-Windows-x64
+          path: frontend/dist/LYCAN-OS-win32-x64
       - name: Upload Store packages
         uses: actions/upload-artifact@v4
         with:
@@ -57,5 +52,4 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            frontend/dist/LYCAN-OS-*-Setup-x64.exe
             release-packages/*.lypkg
