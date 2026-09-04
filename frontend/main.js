@@ -92,12 +92,72 @@ function sha256(file) {
 
 function safePackageId(id) { return /^[a-z0-9][a-z0-9._-]{1,63}$/.test(id); }
 
+function packagesRootPath() {
+  return process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'LYCAN', 'apps') : path.join(app.getPath('userData'), 'apps');
+}
+
+function listPackages() {
+  const root = packagesRootPath();
+  fs.mkdirSync(root, { recursive: true });
+  const result = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !safePackageId(entry.name)) continue;
+    const dir = path.join(root, entry.name);
+    const manifestPath = path.join(dir, 'manifest.json');
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (manifest.id !== entry.name || manifest.type !== 'lycan-app' || !manifest.name || !manifest.version) continue;
+      result.push({ id: manifest.id, name: String(manifest.name), version: String(manifest.version), type: String(manifest.type), description: String(manifest.description || 'Registered LYCAN guest application.'), entry: String(manifest.entry || 'app/index.html') });
+    } catch {}
+  }
+  return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function packageEntryPath(id) {
+  if (!safePackageId(id)) throw new Error('Invalid package id');
+  const root = path.resolve(packagesRootPath());
+  const dir = path.resolve(root, id);
+  if (!dir.startsWith(root + path.sep)) throw new Error('Package path escaped registry');
+  const manifestPath = path.join(dir, 'manifest.json');
+  if (!fs.existsSync(manifestPath)) throw new Error('Package not installed');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (manifest.id !== id || manifest.type !== 'lycan-app') throw new Error('Invalid package manifest');
+  const entry = String(manifest.entry || 'app/index.html').replace(/\\/g, '/');
+  if (!entry || entry.startsWith('/') || entry.includes('../') || entry.includes('/..')) throw new Error('Invalid package entry');
+  const file = path.resolve(dir, entry);
+  if (!file.startsWith(dir + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error('Package entrypoint not found');
+  return { file, manifest };
+}
+
+function launchPackage(id) {
+  const { file, manifest } = packageEntryPath(id);
+  const child = new BrowserWindow({
+    width: 1100,
+    height: 720,
+    minWidth: 640,
+    minHeight: 420,
+    backgroundColor: '#05070a',
+    title: `LYCAN — ${manifest.name}`,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      devTools: !app.isPackaged
+    }
+  });
+  child.setMenuBarVisibility(false);
+  child.webContents.setWindowOpenHandler(({ url }) => ({ action: /^https?:/i.test(url) ? 'allow' : 'deny' }));
+  child.loadFile(file);
+  return { ok: true, id, name: manifest.name, version: manifest.version };
+}
+
 async function installLypkg(filePath) {
   const source = path.resolve(String(filePath || ''));
   if (!source.toLowerCase().endsWith('.lypkg')) throw new Error('Not a .lypkg package');
   if (!fs.existsSync(source)) throw new Error('Package file not found');
   const staging = path.join(app.getPath('temp'), `lycan-lypkg-${crypto.randomBytes(8).toString('hex')}`);
-  const packagesRoot = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'LYCAN', 'apps') : path.join(app.getPath('userData'), 'apps');
+  const packagesRoot = packagesRootPath();
   fs.mkdirSync(staging, { recursive: true });
   fs.mkdirSync(packagesRoot, { recursive: true });
   try {
@@ -151,6 +211,10 @@ app.whenReady().then(() => {
   createWindow(updateTrayState);
   ipcMain.handle('lycan:command', (_event, command) => commandVm(String(command || '')));
   ipcMain.handle('lycan:gecko', (_event, url) => openGecko(url));
+  ipcMain.handle('lycan:list-packages', () => listPackages());
+  ipcMain.handle('lycan:launch-package', (_event, id) => {
+    try { return launchPackage(String(id || '')); } catch (error) { return { ok: false, error: error.message }; }
+  });
   ipcMain.handle('lycan:install-lypkg', async () => {
     const picked = await dialog.showOpenDialog(mainWindow, { title: 'Install LYPKG', properties: ['openFile'], filters: [{ name: 'LYCAN Packages', extensions: ['lypkg'] }] });
     if (picked.canceled || !picked.filePaths[0]) return { ok: false, canceled: true };
