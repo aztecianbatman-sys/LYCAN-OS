@@ -1,13 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320">
-  <defs>
-    <radialGradient id="g" cx="50%" cy="40%"><stop offset="0" stop-color="#f4f7ff"/><stop offset=".46" stop-color="#aebeff"/><stop offset="1" stop-color="#5e74c4"/></radialGradient>
-    <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  </defs>
-  <g fill="none" stroke="url(#g)" stroke-linejoin="round" filter="url(#glow)">
-    <path stroke-width="7" d="M90 208 70 115l56 34 34-72 34 72 56-34-20 93-70 44z"/>
-    <path stroke-width="6" d="M103 177c18 11 33 15 57 15s39-4 57-15"/>
-    <path stroke-width="5" d="M126 150l12 20m56-20-12 20M160 145v44"/>
-  </g>
-  <circle cx="160" cy="160" r="132" fill="none" stroke="#aebeff" stroke-opacity=".18"/>
-  <circle cx="160" cy="160" r="147" fill="none" stroke="#aebeff" stroke-opacity=".08" stroke-dasharray="2 12"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>LYCAN minimalist lycan logo</title>
+  <image href="data:image/webp;base64,UklGRjYGAABXRUJQVlA4WAoAAAAQAAAAIAAAIAAAQUxQSAwAAAAA=" width="1024" height="1024" preserveAspectRatio="xMidYMid meet"/>
 </svg>
