@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "type": "lycan-app",
+  "id": "lycan-notes",
+  "name": "LYCAN Notes",
+  "version": "1.0.0",
+  "description": "A focused guest-native notes workspace for LYCAN.",
+  "entry": "app/index.html",
+  "icon": "app/assets/icon.svg",
+  "permissions": ["storage", "notifications"],
+  "storageQuotaMB": 32
+}
