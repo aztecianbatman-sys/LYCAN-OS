@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "repository": "LYCAN Official Repository",
+  "updated": "2026-09-04",
+  "packages": [
+    {
+      "id": "lycan-notes",
+      "name": "LYCAN Notes",
+      "version": "1.0.0",
+      "category": "PRODUCTIVITY",
+      "description": "A focused guest-native notes workspace for LYCAN.",
+      "permissions": ["storage", "notifications"],
+      "storageQuotaMB": 32,
+      "download": "https://github.com/aztecianbatman-sys/LYCAN-OS/releases/latest/download/lycan-notes-1.0.0.lypkg"
+    },
+    {
+      "id": "lycan-monitor",
+      "name": "LYCAN Monitor",
+      "version": "1.0.0",
+      "category": "SYSTEM",
+      "description": "A guest telemetry surface for memory, packages, processes and network state.",
+      "permissions": ["storage"],
+      "storageQuotaMB": 16,
+      "download": "https://github.com/aztecianbatman-sys/LYCAN-OS/releases/latest/download/lycan-monitor-1.0.0.lypkg"
+    }
+  ]
+}
