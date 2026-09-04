@@ -3,48 +3,23 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#05070a">
 <title>LYCAN OS</title>
-<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="launcher.css">
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="advanced.css"><link rel="stylesheet" href="launcher.css">
 </head>
 <body>
 <div id="scene" class="scene">
   <div class="field field-a"></div><div class="field field-b"></div><div class="scanlines"></div><div class="grain"></div>
-
   <header class="os-chrome">
     <div class="identity"><img src="assets/lycan-mark.svg" alt=""><div><strong>LYCAN</strong><span>VIRTUAL OPERATING ENVIRONMENT</span></div></div>
     <div class="system-ribbon"><span>SESSION <b>01</b></span><i></i><span>ARES <b>ONLINE</b></span><i></i><span>LYFS <b>SEALED</b></span></div>
     <div class="chrome-right"><span id="vmState">BOOTING</span><span class="signal"><b></b><b></b><b></b></span><span id="clock">--:--:--</span><div class="native-actions"><button data-native-window="minimize" aria-label="Minimize">−</button><button data-native-window="maximize" aria-label="Maximize">□</button><button data-native-window="close" aria-label="Close">×</button></div></div>
   </header>
-
-  <aside class="status-column status-left">
-    <div class="rail-title">ARES // CORE</div>
-    <div class="metric"><span>CPU</span><b>02C</b></div><div class="metric"><span>RAM</span><b>512M</b></div><div class="metric"><span>IO</span><b>LOCAL</b></div>
-    <div class="vertical-word">LYCAN RUNTIME</div>
-  </aside>
-
-  <main id="core" class="core">
-    <div class="crosshair"><span></span><span></span></div>
-    <div class="ring ring-outer"></div><div class="ring ring-mid"></div><div class="ring ring-inner"></div>
-    <div class="core-line core-line-a"></div><div class="core-line core-line-b"></div>
-    <button id="logo" class="logo-core" aria-label="Open system interface">
-      <div class="mark-frame"><img class="hero-mark" src="assets/lycan-mark.svg" alt="LYCAN"></div>
-      <span class="logo-word">LYCAN</span><small>VIRTUAL WORKSPACE</small>
-    </button>
-    <div class="core-readout"><span>NODE</span><b>LOCAL/00</b><span>BOUNDARY</span><b>HOST:BLOCKED</b></div>
-  </main>
-
-  <aside class="status-column status-right">
-    <div class="rail-title">SECURITY // GUEST</div>
-    <div class="metric"><span>HOST</span><b>DENIED</b></div><div class="metric"><span>FS</span><b>LYFS</b></div><div class="metric"><span>NET</span><b id="netState">ON</b></div>
-    <div class="vertical-word">HOST ISOLATED</div>
-  </aside>
-
-  <div id="leftRail" class="node-rail left"></div><div id="rightRail" class="node-rail right"></div>
-  <main id="desktopWindows" class="windows"></main>
-
+  <aside class="status-column status-left"><div class="rail-title">ARES // CORE</div><div class="metric"><span>CPU</span><b>02C</b></div><div class="metric"><span>RAM</span><b>512M</b></div><div class="metric"><span>IO</span><b>LOCAL</b></div><div class="vertical-word">LYCAN RUNTIME</div></aside>
+  <main id="core" class="core"><div class="crosshair"><span></span><span></span></div><div class="ring ring-outer"></div><div class="ring ring-mid"></div><div class="ring ring-inner"></div><div class="core-line core-line-a"></div><div class="core-line core-line-b"></div><button id="logo" class="logo-core" aria-label="Open system interface"><div class="mark-frame"><img class="hero-mark" src="assets/lycan-mark.svg" alt="LYCAN"></div><span class="logo-word">LYCAN</span><small>VIRTUAL WORKSPACE</small></button><div class="core-readout"><span>NODE</span><b>LOCAL/00</b><span>BOUNDARY</span><b>HOST:BLOCKED</b></div></main>
+  <aside class="status-column status-right"><div class="rail-title">SECURITY // GUEST</div><div class="metric"><span>HOST</span><b>DENIED</b></div><div class="metric"><span>FS</span><b>LYFS</b></div><div class="metric"><span>NET</span><b id="netState">ON</b></div><div class="vertical-word">HOST ISOLATED</div></aside>
+  <div id="leftRail" class="node-rail left"></div><div id="rightRail" class="node-rail right"></div><main id="desktopWindows" class="windows"></main>
   <div class="edge-marker edge-marker-left"><span></span>APPLICATIONS</div><div class="edge-marker edge-marker-right">SYSTEM<span></span></div>
   <footer class="os-footer"><span>LYCAN OS 1.0</span><span>WINDOWS HOST // GUEST SPACE</span><span>SPACE OPEN/CLOSE</span><span>CTRL+K COMMAND</span></footer>
-  <div class="command-dock"><span class="dock-prompt">LYCAN://</span><button id="dockLaunch">OPEN LAUNCHER</button><span class="dock-note">MOVE TO AN EDGE TO REVEAL NODES</span></div>
-  <div id="toastStack" class="toast-stack"></div>
+  <div class="command-dock"><span class="dock-prompt">LYCAN://</span><button id="dockLaunch">OPEN LAUNCHER</button><span class="dock-note">MOVE TO AN EDGE TO REVEAL NODES</span></div><div id="toastStack" class="toast-stack"></div>
 </div>
 <script src="renderer.js"></script><script src="windowing.js"></script><script src="launcher.js"></script>
 <script>document.addEventListener('click',e=>{const a=e.target.closest('[data-native-window]')?.dataset.nativeWindow;if(a)window.lycan?.window(a);if(e.target.closest('#dockLaunch'))document.querySelector('.launcher-shell')?.classList.add('visible')});</script>
