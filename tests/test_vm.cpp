@@ -7,6 +7,8 @@ int main(){
     auto root=std::filesystem::temp_directory_path()/"lycan-test-vm";
     std::error_code ec; std::filesystem::remove_all(root,ec);
     lycan::VirtualMachine vm(root); vm.boot();
+    assert(vm.execute("logo").find("LYCAN")!=std::string::npos);
+    assert(vm.execute("diagnostics").find("LYCAN SYSTEM")!=std::string::npos);
     assert(vm.execute("diagnostics").find("ARES CPU")!=std::string::npos);
     assert(vm.execute("ls /home").find("Welcome.txt")!=std::string::npos);
     assert(vm.execute("mkdir /home/Test")=="DIRECTORY CREATED");
